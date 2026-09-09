@@ -16,6 +16,7 @@
 
   <!-- Left: tools -->
   <text x="40" y="128" font-size="14" font-weight="600" fill="#6B7280">AI 编程工具（想用几个用几个）</text>
+  <!-- tool cards -->
   <g font-size="15" fill="#1A1B1C">
     <rect x="40" y="142" width="226" height="52" rx="10" fill="#FFFFFF" stroke="#E4E3DD"/>
     <text x="58" y="174">Trae / Trae Work CN</text>
@@ -39,6 +40,7 @@
     <text x="250" y="474" text-anchor="end">薄指针</text>
   </g>
 
+  <!-- converging arrows -->
   <g stroke="#7A9FD8" stroke-width="2" fill="none" marker-end="url(#arrow)">
     <path d="M268,168 C300,168 300,210 336,210"/>
     <path d="M268,288 C312,288 300,300 336,300"/>
@@ -50,16 +52,20 @@
   <text x="358" y="156" font-size="19" font-weight="700" fill="#1A1B1C">.ai-dev/ 单一事实源</text>
   <text x="784" y="156" font-size="12" fill="#6B7280" text-anchor="end">规则只维护这一份</text>
 
+  <!-- L1 -->
   <rect x="358" y="172" width="426" height="66" rx="10" fill="#EAF1FE" stroke="#9BBBF4"/>
   <text x="376" y="200" font-size="15" font-weight="700" fill="#2B4C8C">L1 入口 · 每个新会话必读</text>
   <text x="376" y="224" font-size="13.5" fill="#3A4763">START_HERE.md — 加载协议、文件地图、Token 纪律</text>
 
+  <!-- L2 -->
   <rect x="358" y="250" width="426" height="118" rx="10" fill="#FBFBF8" stroke="#E4E3DD"/>
-  <text x="376" y="278" font-size="15" font-weight="700" fill="#5B6472">L2 长期记忆 · 遇到对应问题才读</text>
-  <text x="376" y="304" font-size="13.5" fill="#3A4763">project-brief.md　项目定位 / 技术栈 / 命令</text>
-  <text x="376" y="328" font-size="13.5" fill="#3A4763">architecture.md　模块地图 / “改什么去哪改”</text>
-  <text x="376" y="352" font-size="13.5" fill="#3A4763">conventions.md · code-index.md（代码地图）</text>
+  <text x="376" y="276" font-size="15" font-weight="700" fill="#5B6472">L2 长期记忆 · 遇到对应问题才读</text>
+  <text x="376" y="298" font-size="13.5" fill="#3A4763">project-brief.md　项目定位 / 技术栈 / 命令</text>
+  <text x="376" y="318" font-size="13.5" fill="#3A4763">architecture.md　模块地图 / “改什么去哪改”</text>
+  <text x="376" y="338" font-size="13.5" fill="#3A4763">conventions.md · code-index.md（代码地图）</text>
+  <text x="376" y="358" font-size="13.5" fill="#3A4763">glossary.md　术语表 / 统一语言（可选）</text>
 
+  <!-- L3 -->
   <rect x="358" y="380" width="426" height="96" rx="10" fill="#EAF1FE" stroke="#9BBBF4"/>
   <text x="376" y="408" font-size="15" font-weight="700" fill="#2B4C8C">L3 工作记忆 · 每个新会话必读</text>
   <text x="376" y="432" font-size="13.5" fill="#3A4763">HANDOFF.md — 进度 / 下一步 / 陷阱 / 改动清单</text>
