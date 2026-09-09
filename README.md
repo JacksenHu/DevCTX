@@ -2,7 +2,7 @@
 
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token。
 >
-> 最新版本 **v0.1.0** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新版本 **v0.1.1** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
 ![跨 IDE 统一上下文机制图解](docs/context-architecture.svg)
 
@@ -65,7 +65,7 @@
 |---|---|---|
 | L0 工具指针 | `AGENTS.md`、`CLAUDE.md`、`.cursor/rules/…`、`.trae/rules/…` 等 | 工具启动时自动读，仅十几行，指向 `.ai-dev/` |
 | L1 入口 | `.ai-dev/START_HERE.md` | **每个新会话必读** |
-| L2 长期记忆 | `project-brief / architecture / conventions / code-index` | 遇到对应问题才按需读 |
+| L2 长期记忆 | `project-brief / architecture / conventions / glossary / code-index` | 遇到对应问题才按需读 |
 | L3 工作记忆 | `HANDOFF.md` + `decisions/` | **每个新会话必读**，收工时自动更新 |
 
 新会话固定开销只有 L1 + L3（约 1000 token 量级），L2 与源码按需加载。
@@ -120,6 +120,11 @@ python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 �
 4. **最小固定开销**：新会话只读 L1+L3，按需才读 L2 与源码。
 5. **自包含**：生成进项目的文件不依赖本技能存在，没装技能的 IDE 也能照协议运转。
 6. **可防腐**：doctor 体检 + HANDOFF 归档，让上下文长期可靠。
+7. **统一语言**：业务术语只在 `glossary.md` 定义一次，所有文档和代码命名引用它，跨工具说同一种话、省 token。
+
+## 与其他工程流程 skill 的关系
+
+本技能只解决"跨 IDE / 模型的上下文与记忆"这一件事，不替代工程流程类 skill。两者**互补共存**：例如 [mattpocock/skills](https://github.com/mattpocock/skills)（需求追问、TDD、调试、架构改进、issue 流程等）管"怎么把活做对"，本技能管"换工具/模型时现场不丢、不重复烧 token"。可以同时安装，互不冲突。
 
 ## 适合 / 不适合
 

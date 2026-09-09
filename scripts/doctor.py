@@ -33,6 +33,7 @@ REQUIRED = [
     "architecture.md", "conventions.md", "ignore.conf",
 ]
 L2_DOCS = ["project-brief.md", "architecture.md", "conventions.md"]
+OPTIONAL_DOCS = ["glossary.md"]  # present-only: absence is fine, blank template warns
 HANDOFF_LIMIT = 120
 FILLED_RATIO = 0.25  # <25% of lines differ from shipped template => still a template
 
@@ -91,6 +92,18 @@ def check_files(ai: Path, fix: bool) -> list[Finding]:
         else:
             out.append(Finding("ok", "L2 docs",
                                f"{name} drafted ({ratio:.0%} differs from template)"))
+    for name in OPTIONAL_DOCS:
+        p, tpl = ai / name, init_project.TEMPLATES / name
+        if not p.exists():
+            continue  # optional: absence is not a finding
+        ratio = _edit_ratio(read_text(p), read_text(tpl)) if tpl.exists() else 1.0
+        if ratio < FILLED_RATIO:
+            out.append(Finding("warn", "L2 docs",
+                               f"{name} (optional) is still the template "
+                               f"(only {ratio:.0%} edited); draft it or delete it"))
+        else:
+            out.append(Finding("ok", "L2 docs",
+                               f"{name} (optional) drafted ({ratio:.0%} differs from template)"))
     return out
 
 
@@ -161,7 +174,7 @@ def check_git(root: Path) -> list[Finding]:
     gi = root / ".gitignore"
     if not gi.exists():
         return [Finding("ok", "git", "no .gitignore (project may not use git yet)")]
-    text = read_text(gi).lstrip("\ufeff")  # tolerate UTF-8 BOM (common on Windows)
+    text = read_text(gi).lstrip("﻿")  # tolerate UTF-8 BOM (common on Windows)
     if re.search(r"^\s*\.ai-dev\b", text, re.M):
         return [Finding("warn", "git",
                         ".ai-dev is git-ignored: shared context will NOT reach teammates/tools")]
