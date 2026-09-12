@@ -55,9 +55,9 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 
 ## 2. resume（新会话自动执行，不要求用户提醒）
 
-1. 读 START_HERE + HANDOFF，暂不预读 L2；沿 HANDOFF「下一步」继续。
+1. 读 START_HERE + HANDOFF，暂不预读 L2；沿 HANDOFF「下一步」继续。若 HANDOFF 记了"进行中的 spec"，按该路径读 `.specify/tasks.md` 对应条目继续 speckit 流程。
 2. 一两句话对齐现状即可，任务清晰直接开工，有歧义/风险才确认。
-3. 定位代码先查 code-index，只精读目标文件；文档与代码冲突以代码为准并回写文档。
+3. 定位代码先查 code-index，只精读目标文件；文档与代码冲突以代码为准并回写文档。动手前先查 `lessons.md`。
 4. 工具不自动加载规则文件时，用 references/tool-integrations.md §4 的开场白兜底。
 
 ## 3. handoff（任务闭环自动执行，省 token 的核心）
@@ -66,6 +66,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 留：目标、可验证完成项、有序下一步、新约束/决策、失败路径、改动文件及原因；
 删：对话过程、大段代码/日志、代码自解释的细节。结构变动顺手 reindex，重大决策补 ADR。
 **HANDOFF 陷阱区里某个坑重复出现第二次，就提升到 `lessons.md`**（永久教训，不随 handoff 压缩丢失）；动手前先查 lessons.md，避免重蹈覆辙。
+若项目用了 speckit / Spec Kit（存在 `.specify/`），HANDOFF 元信息要记"进行中的 spec 路径 + 当前 task 编号"，让换工具后新 AI 直接续上对应任务；spec.md / plan.md / tasks.md 归 `.specify/`，不要复制进 `.ai-dev/`。
 
 ## 4. 维护脚本（AI 调用；均纯标准库、跨平台、UTF-8、幂等）
 

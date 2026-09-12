@@ -2,7 +2,7 @@
 
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型 / 时间 / 人之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token、不重复踩旧坑。
 >
-> 最新版本 **v0.1.2** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新版本 **v0.1.3** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
 ![跨 IDE 统一上下文机制图解](docs/context-architecture.svg)
 
@@ -150,6 +150,23 @@ python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 �
 6. **可防腐**：doctor 体检 + HANDOFF 归档 + lessons 沉淀，让上下文长期可靠。
 7. **统一语言**：业务术语只在 `glossary.md` 定义一次，所有文档和代码命名引用它，跨工具说同一种话、省 token。
 8. **失败分层**：临时坑写 HANDOFF（易失），重复踩第二次提升到 lessons.md（持久），AI 不重复交学费。
+
+## 与 speckit / Spec Kit 规格驱动开发联动
+
+本项目可与 [speckit-agent-skills](https://github.com/dceoy/speckit-agent-skills)（上游 [github/spec-kit](https://github.com/github/spec-kit)）无缝配合：speckit 管"这次新需求怎么做"（constitution → specify → plan → tasks → implement，产出在 `.specify/`），本项目管"项目长期记忆怎么跨工具保持"（产出在 `.ai-dev/`）。
+
+**两者不互相内嵌**：speckit 是 AGPL-3.0，本项目是 MIT，独立安装、通过文件系统对接，避免许可证传染。
+
+### 联动用法
+
+1. **两个 skill 各自独立安装**：先按本仓库说明装好 cross-ide-dev-context，再按 speckit 仓库说明装好 speckit skills。
+2. **init 本项目后**：`.ai-dev/` 照常生成；如果项目里已有 `.specify/`，新会话读 HANDOFF 时会看到"进行中的 spec"字段。
+3. **收工写 HANDOFF**：用 speckit 做到一半时，在 HANDOFF 元信息写一行：
+   > 进行中的 spec：`.specify/specs/<功能名>/tasks.md` 第 3/7 条
+4. **换工具/换模型**：新 AI 读 HANDOFF → 知道在 speckit 流程哪一步 → 读对应 tasks 片段继续，不用重读整个 spec。
+5. **speckit 踩的坑**：某个流程坑（如"不要跳过 clarify 导致 plan 返工"）重复出现第二次，提升到 `.ai-dev/lessons.md`。
+
+一句话：**speckit 是施工图纸，本项目是工地交接手册；HANDOFF 记"图纸翻到第几页"，换工人不用重看全套图纸。**
 
 ## 与其他工程流程 skill 的关系
 

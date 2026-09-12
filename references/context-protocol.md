@@ -100,6 +100,16 @@ ADR 只记“为什么”，实现细节归代码与架构文档。
 - **术语只用 glossary 定义过的词**：业务黑话先写进 glossary，正文直接用，不再每次解释。
 - **一份内容只存一处**：复用写路径引用，不复制粘贴；发现重复立即合并。
 
+## 5.7 与 speckit / Spec Kit 等规格驱动工具的分层配合
+
+speckit（[github.com/dceoy/speckit-agent-skills](https://github.com/dceoy/speckit-agent-skills)，上游 [github/spec-kit](https://github.com/github/spec-kit)）解决"这次新需求怎么做"：constitution → specify → plan → tasks → implement，产出在 `.specify/`。
+本协议解决"项目长期记忆怎么跨工具/模型/人/时间保持"，产出在 `.ai-dev/`。两者**互补不内嵌**：
+
+- **文件分工**：`.specify/` 是 speckit 的事实源（spec/plan/tasks），`.ai-dev/` 是项目长期记忆；互不复制内容，只写路径引用。
+- **桥梁在 HANDOFF**：用 speckit 做功能时，HANDOFF 元信息记"进行中的 spec：`.specify/specs/<名>/tasks.md` 第 N 条 / 剩 M 条"；换工具后新 AI 读 HANDOFF 就知道在 speckit 流程哪一步，不用重读整个 spec。
+- **lessons 沉淀流程坑**：speckit 流程里踩的坑（如"不要跳过 clarify 导致 plan 返工"）重复出现第二次，提升到 `lessons.md`。
+- **不要内嵌 speckit 代码**：它是 AGPL-3.0，本仓库是 MIT，混入会传染许可证；两个 skill 各自独立安装，通过文件系统对接。
+
 ## 6. 反模式（明确禁止）
 
 - 在多个工具私有文件里复制粘贴同一份项目规则。
