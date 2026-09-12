@@ -158,16 +158,16 @@ python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 �
 
 ## 与 speckit / Spec Kit 规格驱动开发联动
 
-本项目可与 [speckit-agent-skills](https://github.com/dceoy/speckit-agent-skills)（上游 [github/spec-kit](https://github.com/github/spec-kit)）无缝配合：speckit 管"这次新需求怎么做"（constitution → specify → plan → tasks → implement，产出在 `.specify/`），本项目管"项目长期记忆怎么跨工具保持"（产出在 `.ai-dev/`）。
+本项目可与 [speckit-agent-skills](https://github.com/dceoy/speckit-agent-skills)（核心引擎 [github/spec-kit](https://github.com/github/spec-kit)）无缝配合：speckit 管"这次新需求怎么做"（constitution → specify → clarify → plan → tasks → implement，产出在 `specs/<名>/`），本项目管"项目长期记忆怎么跨工具保持"（产出在 `.ai-dev/`）。
 
-**两者不互相内嵌**：speckit 是 AGPL-3.0，本项目是 MIT，独立安装、通过文件系统对接，避免许可证传染。
+**两者不互相内嵌**：speckit-agent-skills 是 AGPL-3.0，本项目是 MIT，独立安装、通过文件系统对接，避免许可证传染。新手只需装官方 spec-kit（`uv tool install specify-cli` 后 `specify init --here --integration <agent>`）；dceoy 仓库是预生成的 skills 包，可选。
 
 ### 联动用法
 
-1. **两个 skill 各自独立安装**：先按本仓库说明装好 cross-ide-dev-context，再按 speckit 仓库说明装好 speckit skills。
-2. **init 本项目后**：`.ai-dev/` 照常生成；如果项目里已有 `.specify/`，新会话读 HANDOFF 时会看到"进行中的 spec"字段。
-3. **收工写 HANDOFF**：用 speckit 做到一半时，在 HANDOFF 元信息写一行：
-   > 进行中的 spec：`.specify/specs/<功能名>/tasks.md` 第 3/7 条
+1. **两个工具各自独立 init**：先让本项目建 `.ai-dev/`，再 `specify init --here --integration <agent>` 建 `.specify/` 与 `specs/`。
+2. **新会话自动恢复**：AI 读 `.ai-dev/START_HERE` + `HANDOFF`；若项目里有 `specs/`，新会话读 HANDOFF 元信息里的"进行中的 spec"字段。
+3. **收工自动同步 spec 进度**：handoff 时 AI 自动列出 `specs/` 下未闭环的 spec，读 `tasks.md` 勾选状态算进度（已完成 N / 共 M 条），写入 HANDOFF：
+   > 进行中的 spec：`specs/login-refactor/tasks.md` 第 3/7 条（正在做"拖拽排序"）
 4. **换工具/换模型**：新 AI 读 HANDOFF → 知道在 speckit 流程哪一步 → 读对应 tasks 片段继续，不用重读整个 spec。
 5. **speckit 踩的坑**：某个流程坑（如"不要跳过 clarify 导致 plan 返工"）重复出现第二次，提升到 `.ai-dev/lessons.md`。
 

@@ -17,7 +17,7 @@
    - 不清楚架构原因与依赖 → `architecture.md`
    - 遇到不懂的业务黑话 / 缩写 / 专有名词 → `glossary.md`（术语表）
    - 动手前先查有没有"这个项目永远不能这么干"的坑 → `lessons.md`（永久教训）
-   - 项目里有 `.specify/`（用了 speckit / Spec Kit）→ 按 HANDOFF「进行中的 spec」字段读对应 tasks 片段
+   - 项目里有 `specs/`（用了 speckit / Spec Kit）→ 按 HANDOFF「进行中的 spec」字段读对应 tasks 片段
    - “以前为什么这么定” → `decisions/` 决策记录
 4. `code-index.md` 能回答的问题，不许全仓遍历或批量打开源码。
 5. 文档与代码矛盾时以代码为准，并当场回写修正对应文档。
@@ -36,7 +36,7 @@
 | `decisions/` | 重大决策记录 ADR，一决策一文件 | 做出难以逆转的决定时 |
 | `archive/` | 过期 HANDOFF 归档 | 自动或手工归档时 |
 | `ignore.conf` | 代码索引忽略的 glob 规则 | 索引噪音大时 |
-| `.specify/`（如存在） | speckit / Spec Kit 产出（spec.md / plan.md / tasks.md），不归本目录维护 | speckit 流程自行更新；HANDOFF 只记"当前做到哪条" |
+| `specs/`（如存在） | speckit / Spec Kit 产出（spec.md / plan.md / tasks.md），不归本目录维护 | speckit 流程自行更新；handoff 时 AI 自动算进度并写进 HANDOFF |
 
 ## 3. 收工协议（Handoff，任务闭环或切换前自动执行）
 

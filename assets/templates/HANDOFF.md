@@ -9,7 +9,7 @@
 - 最近更新：{{DATE}}
 - 更新于工具 / 模型：<!-- 例: Cursor + claude-sonnet -->
 - 工作分支：<!-- 例: feature/login -->
-- 进行中的 spec（如用 speckit / Spec Kit）：<!-- 例: .specify/specs/login-refactor/tasks.md 第 3/7 条；没用就留空 -->
+- 进行中的 spec（如用 speckit / Spec Kit）：<!-- 收工时由 AI 自动读 specs/*/tasks.md 勾选状态填入；例: specs/login-refactor/tasks.md 第 3/7 条（正在做"拖拽排序"）；没用就留空 -->
 
 ## 当前任务
 
