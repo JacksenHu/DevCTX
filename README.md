@@ -1,4 +1,4 @@
-# cross-ide-dev-context
+# devctx
 
 [![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -61,11 +61,11 @@
 
 ### 第 1 步：获取完整文件夹（二选一）
 
-- **方式 A（最简单）**：本仓库页面右上角绿色按钮 **Code → Download ZIP**，解压得到 `cross-ide-dev-context/` 文件夹。
+- **方式 A（最简单）**：本仓库页面右上角绿色按钮 **Code → Download ZIP**，解压得到 `devctx/` 文件夹。
 - **方式 B（会用 git）**：
 
   ```bash
-  git clone https://github.com/JacksenHu/cross-ide-dev-context.git
+  git clone https://github.com/JacksenHu/devctx.git
   ```
 
 > 必须是**整个文件夹**（同时含 `SKILL.md`、`scripts/`、`assets/`、`references/`）。不能只拿 `SKILL.md` 一个文件——`scripts/` 里的 .py 是 AI 要调用的工具，缺一不可。
@@ -74,7 +74,7 @@
 
 | 助手环境 | 放置位置（举例） |
 |---|---|
-| 豆包桌面端 | `.user_skills/cross-ide-dev-context/` |
+| 豆包桌面端 | `.user_skills/devctx/` |
 | 其他支持"技能 / 规则 / skills"的 AI 编程助手 | 其文档指定的 skills / rules 目录下，保持同名文件夹 |
 
 放好后**新开会话**（或重启对话）让助手识别到技能。
@@ -109,7 +109,7 @@ AGENTS.md 通用兜底（Codex / Amp / Zed）、Claude Code、Cursor（新版 .m
 ## 目录结构
 
 ```text
-cross-ide-dev-context/
+devctx/
 ├── SKILL.md                     # 唯一入口：AI 的操作手册（触发判断、自动动作链、降级路径）
 ├── scripts/                     # AI 调用的工具，用户无需运行
 │   ├── init_project.py          # 初始化 .ai-dev + 首份索引 + 工具指针
