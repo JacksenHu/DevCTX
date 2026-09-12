@@ -1,0 +1,53 @@
+# Changelog
+
+本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [Unreleased]
+
+## [0.1.3] - 2026-09-12
+
+### Added
+- 与 [speckit-agent-skills](https://github.com/dceoy/speckit-agent-skills)（上游 [github/spec-kit](https://github.com/github/spec-kit)）的分层对接层：
+  - `HANDOFF.md` 模板新增"进行中的 spec"可选字段
+  - `START_HERE.md` 按需加载与文件地图登记 `.specify/`
+  - `SKILL.md` resume/handoff 说明如何续上 speckit 流程
+  - `context-protocol.md` §5.7 写明文件分工、桥梁位置与 AGPL 不内嵌原则
+  - `README.md` 新增"与 speckit 联动"整节，标注项目地址与五步联动用法
+
+### Notes
+- 不内嵌 speckit 代码：speckit 是 AGPL-3.0，本仓库 MIT，两个 skill 各自独立安装、通过文件系统对接。
+
+## [0.1.2] - 2026-09-12
+
+### Added
+- 新增 `assets/templates/lessons.md`：项目永久教训层（L2 可选文件）
+  - 与 HANDOFF 陷阱区分层：临时坑写 HANDOFF（易失），某坑重复出现第二次提升到 lessons.md（持久）
+  - 三表结构：架构与边界 / 工具链与环境 / 数据与外部系统
+- `init_project.py` COPY_MAP 加 lessons.md，末尾提示"初始可空"
+- `doctor.py` OPTIONAL_DOCS 加 lessons.md（存在才查空模板，缺失不报错）
+- `START_HERE.md` 按需加载加"动手前查 lessons"，文件地图登记 lessons
+- `SKILL.md` L2 模型、init 起草列表、handoff 纪律、无 Python 降级复制清单、完成前自检同步更新
+- `context-protocol.md` L2 表加 lessons，handoff SOP 加"失败路径分层"条
+- `README.md` 四层表 L2 加 lessons
+
+## [0.1.1] - 2026-09-12
+
+### Added
+- 新增 `assets/templates/glossary.md`：项目术语表（L2 可选文件）
+- `init_project.py` COPY_MAP 加 glossary，AI 必做提示改为一次性集中追问关键歧义（grilling 轻量版）
+- `context-protocol.md` 新增 §5.6"写给 AI 的文档原则"
+- `SKILL.md` 触发表加"触发方式"列，init 起草列表加 glossary
+- `doctor.py` OPTIONAL_DOCS 加 glossary
+
+## [0.1.0] - 2026-09-12
+
+### Added
+- 首个公开版本：跨 IDE / 模型无缝开发协议
+- L0 薄指针：自动生成 12 种工具的规则文件（AGENTS.md / CLAUDE.md / .cursor/rules / .windsurfrules / .trae/rules / GEMINI.md / copilot-instructions / .clinerules / .roorules / .continuerules / CONVENTIONS.md）
+- L1 入口：`.ai-dev/START_HERE.md`
+- L2 长期记忆：project-brief / architecture / conventions / code-index
+- L3 工作记忆：HANDOFF.md + decisions/（ADR）+ archive/
+- 6 个纯标准库脚本：init_project / build_index / sync_rules / archive_handoff / doctor / _common
+- 无 Python 降级路径：AI 用文件工具手工等价落地
+- doctor 六类腐化体检：缺文件 / L2 空模板 / 索引过时 / HANDOFF 超限 / 指针漂移 / .ai-dev 被 git 误忽略
+- 机制图解 SVG
