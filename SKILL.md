@@ -16,7 +16,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 
 切换工具/模型之所以贵，是因为项目认知只存在易失的对话历史里。本技能把它**外置为项目内一套文件**：
 
-- **单一事实源** `.ai-dev/`：L1 入口 START_HERE、L2 长期记忆（project-brief / architecture / conventions / glossary / code-index）、L3 工作记忆 HANDOFF 与 decisions/。
+- **单一事实源** `.ai-dev/`：L1 入口 START_HERE、L2 长期记忆（project-brief / architecture / conventions / glossary / lessons / code-index）、L3 工作记忆 HANDOFF 与 decisions/。
 - **薄指针**：各工具私有规则文件只写十几行“自动去读 .ai-dev/”，脚本统一生成，规则绝不复制多份。
 - **固定开销极小**：新会话只读 START_HERE + HANDOFF（约 1000 token）恢复现场，其余按需，禁止全仓扫描。
 
@@ -37,7 +37,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 1. 定位项目根（向上找 `.git`，否则用用户给的目录）。脚本路径用本技能目录：`<本SKILL.md所在目录>/scripts/init_project.py <项目根>`（默认 detected；用户明确要全工具覆盖加 `--all`）。
 2. 脚本会：建 `.ai-dev/`（模板来自 `assets/templates/`，不覆盖已有文件）、生成首份 code-index、给在用工具写指针。
 3. **脚本跑完不是结束**：你必须继续自动完成，不许把空模板留给用户——
-   - 以 code-index 为地图扫描真实代码，**亲自起草** project-brief / architecture / conventions / glossary（术语表只留会被猜错的业务黑话与缩写）：事实只来自代码与用户陈述，不确定写“待确认”，禁止编造版本、命令、目录；
+   - 以 code-index 为地图扫描真实代码，**亲自起草** project-brief / architecture / conventions / glossary（术语表只留会被猜错的业务黑话与缩写）/ lessons（永久教训，初始可空）：事实只来自代码与用户陈述，不确定写“待确认”，禁止编造版本、命令、目录；
    - 起草后把“仅靠代码定不了、又会改变后续方向”的关键问题（真实运行命令、业务术语含义、本期边界）**一次性集中**向用户确认，不逐条打断、不为问而问；
    - architecture 要写出模块分区与“改什么去哪改”速查；HANDOFF 写入初始状态；
    - 补项目特有忽略到 `.ai-dev/ignore.conf`（部署运行时目录、构建产物、凭据目录），重建一次索引；
@@ -48,7 +48,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 
 用你的文件工具手工完成与脚本等价的结果，不许要求用户安装任何东西：
 
-1. 把 `assets/templates/` 下 START_HERE、HANDOFF、project-brief、architecture、conventions、glossary、ignore.conf 复制为 `<项目根>/.ai-dev/` 同名文件（替换 {{DATE}}），ADR 模板放 `decisions/0000-template.md`，建空 `archive/`。
+1. 把 `assets/templates/` 下 START_HERE、HANDOFF、project-brief、architecture、conventions、glossary、lessons、ignore.conf 复制为 `<项目根>/.ai-dev/` 同名文件（替换 {{DATE}}），ADR 模板放 `decisions/0000-template.md`，建空 `archive/`。
 2. 按 `scripts/_common.py` 的 TOOL_SPECS 找到目标工具的规则文件相对路径（检测到在用的工具，外加 AGENTS.md），写入 POINTER_BODY 同等内容（frontmatter 规则照 _common.py）。
 3. code-index 手工生成：列目录树 + 每个源码文件“路径（约 N 行）— 头部注释一句话”，忽略规则等价 ignore.conf。
 4. 后续 reindex/archive 同样手工增量完成，并在 HANDOFF 注明“本项目由无脚本路径初始化”。
@@ -65,6 +65,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 按 HANDOFF 模板更新，取舍标准：**“下一个模型不知道它，会不会走错路或重复劳动？”**
 留：目标、可验证完成项、有序下一步、新约束/决策、失败路径、改动文件及原因；
 删：对话过程、大段代码/日志、代码自解释的细节。结构变动顺手 reindex，重大决策补 ADR。
+**HANDOFF 陷阱区里某个坑重复出现第二次，就提升到 `lessons.md`**（永久教训，不随 handoff 压缩丢失）；动手前先查 lessons.md，避免重蹈覆辙。
 
 ## 4. 维护脚本（AI 调用；均纯标准库、跨平台、UTF-8、幂等）
 
@@ -101,7 +102,7 @@ scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模�
 
 ## 完成前自检
 
-- `.ai-dev/` 必备文件齐全，L2 是据实填写的实质内容而非空模板（glossary 可选，存在则应已填写）；doctor 无 error。
+- `.ai-dev/` 必备文件齐全，L2 是据实填写的实质内容而非空模板（glossary / lessons 可选，存在则应已填写）；doctor 无 error。
 - code-index 与当前文件结构一致、无运行时噪音；在用工具指针同步、手写规则未被破坏。
 - HANDOFF 能让全新会话仅凭它 + START_HERE 对齐现状，且不超长。
 - 全程未让用户手动执行命令；无 Python 时已走降级路径落地。

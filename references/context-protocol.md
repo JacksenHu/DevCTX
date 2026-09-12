@@ -21,7 +21,7 @@
 |---|---|---|---|---|
 | L0 工具指针 | CLAUDE.md、.cursor/rules 等 | 自动生成，约 10 行 | 工具启动时自己读 | sync 脚本 |
 | L1 入口 | `.ai-dev/START_HERE.md` | 稳定，加载协议+文件地图 | **每个新会话必读** | 协议变化时 |
-| L2 长期记忆 | project-brief / architecture / conventions / glossary / code-index | 缓慢变化 | 按需：遇到对应问题才读 | AI 随改动更新；索引脚本重建 |
+| L2 长期记忆 | project-brief / architecture / conventions / glossary / lessons / code-index | 缓慢变化 | 按需：遇到对应问题才读 | AI 随改动更新；索引脚本重建 |
 | L3 工作记忆 | `.ai-dev/HANDOFF.md` + decisions/ | 快速变化 | **每个新会话必读** | 每次收工更新；超限归档 |
 
 新会话固定开销只有 L1 + L3；L2 按需取；源码最后读。这与“先把整个仓库塞进上下文”
@@ -61,6 +61,7 @@
 - 留：目标与背景一句、可验证的完成项、下一步具体动作、新形成的约束/决策、失败路径、改动文件及原因。
 - 删：对话过程、情绪与寒暄、已被代码自解释的实现细节、大段代码/日志/报错原文（写路径即可）。
 - 结构变动 → reindex；重大决策 → 补一条 ADR。
+- **失败路径分层**：本次临时坑写 HANDOFF 陷阱区；某个坑重复出现第二次，提升到 `lessons.md`（永久教训，不随 handoff 压缩丢失）。新 AI 动手前先查 lessons.md。
 
 ### reindex — 增删/移动文件或模块后
 运行 `scripts/build_index.py`；架构层面的变化同时改 architecture.md，

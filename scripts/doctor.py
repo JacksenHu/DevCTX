@@ -33,7 +33,7 @@ REQUIRED = [
     "architecture.md", "conventions.md", "ignore.conf",
 ]
 L2_DOCS = ["project-brief.md", "architecture.md", "conventions.md"]
-OPTIONAL_DOCS = ["glossary.md"]  # present-only: absence is fine, blank template warns
+OPTIONAL_DOCS = ["glossary.md", "lessons.md"]  # present-only: absence is fine, blank template warns
 HANDOFF_LIMIT = 120
 FILLED_RATIO = 0.25  # <25% of lines differ from shipped template => still a template
 

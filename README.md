@@ -2,7 +2,7 @@
 
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token。
 >
-> 最新版本 **v0.1.1** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新版本 **v0.1.2** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
 ![跨 IDE 统一上下文机制图解](docs/context-architecture.svg)
 
@@ -65,7 +65,7 @@
 |---|---|---|
 | L0 工具指针 | `AGENTS.md`、`CLAUDE.md`、`.cursor/rules/…`、`.trae/rules/…` 等 | 工具启动时自动读，仅十几行，指向 `.ai-dev/` |
 | L1 入口 | `.ai-dev/START_HERE.md` | **每个新会话必读** |
-| L2 长期记忆 | `project-brief / architecture / conventions / glossary / code-index` | 遇到对应问题才按需读 |
+| L2 长期记忆 | `project-brief / architecture / conventions / glossary / lessons / code-index` | 遇到对应问题才按需读 |
 | L3 工作记忆 | `HANDOFF.md` + `decisions/` | **每个新会话必读**，收工时自动更新 |
 
 新会话固定开销只有 L1 + L3（约 1000 token 量级），L2 与源码按需加载。

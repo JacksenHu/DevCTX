@@ -29,6 +29,7 @@ COPY_MAP = {
     "conventions.md": "conventions.md",
     "ignore.conf": "ignore.conf",
     "glossary.md": "glossary.md",
+    "lessons.md": "lessons.md",
     "ADR-template.md": "decisions/0000-template.md",
 }
 
@@ -77,7 +78,8 @@ def init(root: Path, mode: str, force: bool) -> int:
     print(
         "\n[AI 必做，不要把空模板留给用户]\n"
         f"1. 立即扫描代码（以 code-index.md 为地图），自动起草 {AI_DEV_DIR}/project-brief.md、"
-        "architecture.md、conventions.md、glossary.md（术语表，只留会被猜错的业务黑话/缩写）："
+        "architecture.md、conventions.md、glossary.md（术语表，只留会被猜错的业务黑话/缩写）；"
+        "lessons.md 初始可空，后续 HANDOFF 陷阱区某坑重复出现第二次再提升进来。"
         "事实只来自代码与用户，不确定标“待确认”，禁止编造。\n"
         "2. 用 architecture.md 写清模块分区与“改什么去哪改”速查。\n"
         "3. 初始化 HANDOFF.md 当前状态；然后用一句话告诉用户“已接入，以后直接提需求即可”。\n"
