@@ -1,120 +1,112 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" font-family="'PingFang SC','Microsoft YaHei','Segoe UI',Arial,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" font-family="'PingFang SC','Microsoft YaHei','Segoe UI',sans-serif">
   <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#7A9FD8"/>
-    </marker>
-    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#3FA083"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1421"/>
+      <stop offset="1" stop-color="#111a2e"/>
+    </linearGradient>
+    <linearGradient id="boxL2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1e3a5f"/>
+      <stop offset="1" stop-color="#244a7a"/>
+    </linearGradient>
+    <linearGradient id="boxL3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5b3a1e"/>
+      <stop offset="1" stop-color="#7a4a24"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/>
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="720" fill="#F4F3EE" rx="16"/>
+  <rect width="1200" height="860" fill="url(#bg)"/>
 
-  <!-- Title -->
-  <text x="40" y="52" font-size="28" font-weight="700" fill="#1A1B1C">跨 IDE 无缝开发 · 统一上下文协议</text>
-  <text x="40" y="82" font-size="15" fill="#6B7280">把易失的对话记忆，外置成项目内所有 AI 工具共享的一套文件 —— 换工具、换模型不再重读全仓</text>
+  <!-- 标题 -->
+  <text x="600" y="48" text-anchor="middle" fill="#e6edf3" font-size="26" font-weight="700">同一项目，跨工具 / 跨模型 / 跨时间 / 跨人 无缝接续</text>
+  <text x="600" y="76" text-anchor="middle" fill="#8b98a9" font-size="14">项目认知外置成仓库文件，换任何 AI 都能 5 秒恢复现场，不重扫全仓、不重复烧 token</text>
 
-  <!-- Left: tools -->
-  <text x="40" y="128" font-size="14" font-weight="600" fill="#6B7280">AI 编程工具（想用几个用几个）</text>
-  <!-- tool cards -->
-  <g font-size="15" fill="#1A1B1C">
-    <rect x="40" y="142" width="226" height="52" rx="10" fill="#FFFFFF" stroke="#E4E3DD"/>
-    <text x="58" y="174">Trae / Trae Work CN</text>
-    <rect x="40" y="202" width="226" height="52" rx="10" fill="#FFFFFF" stroke="#E4E3DD"/>
-    <text x="58" y="234">Cursor</text>
-    <rect x="40" y="262" width="226" height="52" rx="10" fill="#FFFFFF" stroke="#E4E3DD"/>
-    <text x="58" y="294">Claude Code</text>
-    <rect x="40" y="322" width="226" height="52" rx="10" fill="#FFFFFF" stroke="#E4E3DD"/>
-    <text x="58" y="354">Windsurf / Copilot</text>
-    <rect x="40" y="382" width="226" height="52" rx="10" fill="#FFFFFF" stroke="#E4E3DD"/>
-    <text x="58" y="414">Cline / Roo / Gemini</text>
-    <rect x="40" y="442" width="226" height="52" rx="10" fill="#FFFFFF" stroke="#E4E3DD"/>
-    <text x="58" y="474">Codex / Aider …</text>
+  <!-- 顶部：各 AI 工具 -->
+  <g font-size="13" fill="#c9d1d9">
+    <rect x="60" y="105" width="140" height="52" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="130" y="136" text-anchor="middle">Cursor</text>
+    <rect x="215" y="105" width="140" height="52" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="285" y="136" text-anchor="middle">Claude Code</text>
+    <rect x="370" y="105" width="140" height="52" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="440" y="136" text-anchor="middle">Trae / Work</text>
+    <rect x="525" y="105" width="140" height="52" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="595" y="136" text-anchor="middle">Windsurf</text>
+    <rect x="680" y="105" width="140" height="52" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="750" y="136" text-anchor="middle">Copilot</text>
+    <rect x="835" y="105" width="140" height="52" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="905" y="136" text-anchor="middle">Cline / Roo</text>
+    <rect x="990" y="105" width="150" height="52" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="1065" y="136" text-anchor="middle">豆包 / 任意 Work</text>
   </g>
-  <g font-size="12" fill="#8A93A6">
-    <text x="250" y="174" text-anchor="end">薄指针</text>
-    <text x="250" y="234" text-anchor="end">薄指针</text>
-    <text x="250" y="294" text-anchor="end">薄指针</text>
-    <text x="250" y="354" text-anchor="end">薄指针</text>
-    <text x="250" y="414" text-anchor="end">薄指针</text>
-    <text x="250" y="474" text-anchor="end">薄指针</text>
+  <text x="600" y="178" text-anchor="middle" fill="#58a6ff" font-size="12">▼ 每个工具私有规则文件只写 10 行"薄指针"：去读 .ai-dev/START_HERE.md ▼</text>
+
+  <!-- 中间：.ai-dev 四层盒子 -->
+  <rect x="120" y="200" width="960" height="440" rx="14" fill="#0f1a2e" stroke="#30363d" stroke-width="1.5"/>
+  <text x="600" y="228" text-anchor="middle" fill="#e6edf3" font-size="17" font-weight="600">.ai-dev/ — 项目唯一事实源（提交进 git，所有人所有工具共享）</text>
+
+  <!-- L1 入口 -->
+  <rect x="150" y="248" width="900" height="58" rx="8" fill="#1f6feb" opacity="0.18" stroke="#1f6feb"/>
+  <text x="170" y="272" fill="#58a6ff" font-size="13" font-weight="600">L1 入口</text>
+  <text x="170" y="292" fill="#c9d1d9" font-size="13">START_HERE.md — 加载协议 + 文件地图（每个新会话必读，约 1k token）</text>
+
+  <!-- L2 长期记忆 -->
+  <rect x="150" y="318" width="900" height="170" rx="8" fill="url(#boxL2)" opacity="0.35" stroke="#388bfd"/>
+  <text x="170" y="342" fill="#79c0ff" font-size="13" font-weight="600">L2 长期记忆（按需读，遇到对应问题才打开）</text>
+  <g font-size="12.5" fill="#e6edf3">
+    <rect x="170" y="356" width="140" height="40" rx="6" fill="#0d1421" stroke="#388bfd"/>
+    <text x="240" y="380" text-anchor="middle">project-brief</text>
+    <rect x="320" y="356" width="140" height="40" rx="6" fill="#0d1421" stroke="#388bfd"/>
+    <text x="390" y="380" text-anchor="middle">architecture</text>
+    <rect x="470" y="356" width="140" height="40" rx="6" fill="#0d1421" stroke="#388bfd"/>
+    <text x="540" y="380" text-anchor="middle">conventions</text>
+    <rect x="620" y="356" width="140" height="40" rx="6" fill="#0d1421" stroke="#388bfd"/>
+    <text x="690" y="380" text-anchor="middle">glossary</text>
+    <rect x="770" y="356" width="140" height="40" rx="6" fill="#2d1f0f" stroke="#d29922"/>
+    <text x="840" y="374" text-anchor="middle" fill="#e3b341" font-weight="600">lessons</text>
+    <text x="840" y="389" text-anchor="middle" fill="#8b98a9" font-size="10">永久教训</text>
+    <rect x="920" y="356" width="115" height="40" rx="6" fill="#0d1421" stroke="#388bfd"/>
+    <text x="977" y="380" text-anchor="middle">code-index</text>
   </g>
+  <text x="170" y="425" fill="#8b98a9" font-size="11.5">项目是什么 · 怎么跑 · 架构分区 · 编码规范 · 业务黑话 · 反复踩过的坑 · 代码地图</text>
+  <text x="170" y="448" fill="#8b98a9" font-size="11.5">lessons 从 HANDOFF 陷阱区升级而来：临时坑易失，反复踩第二次才提升到这里，跨阶段持久生效</text>
+  <text x="170" y="472" fill="#8b98a9" font-size="11.5">AI 随代码改动增量更新；code-index 由脚本重建，只列文件+一句话职责，不复制源码</text>
 
-  <!-- converging arrows -->
-  <g stroke="#7A9FD8" stroke-width="2" fill="none" marker-end="url(#arrow)">
-    <path d="M268,168 C300,168 300,210 336,210"/>
-    <path d="M268,288 C312,288 300,300 336,300"/>
-    <path d="M268,468 C300,468 300,392 336,392"/>
-  </g>
-
-  <!-- Center: .ai-dev -->
-  <rect x="336" y="120" width="470" height="410" rx="14" fill="#FFFFFF" stroke="#9BBBF4" stroke-width="2"/>
-  <text x="358" y="156" font-size="19" font-weight="700" fill="#1A1B1C">.ai-dev/ 单一事实源</text>
-  <text x="784" y="156" font-size="12" fill="#6B7280" text-anchor="end">规则只维护这一份</text>
-
-  <!-- L1 -->
-  <rect x="358" y="172" width="426" height="66" rx="10" fill="#EAF1FE" stroke="#9BBBF4"/>
-  <text x="376" y="200" font-size="15" font-weight="700" fill="#2B4C8C">L1 入口 · 每个新会话必读</text>
-  <text x="376" y="224" font-size="13.5" fill="#3A4763">START_HERE.md — 加载协议、文件地图、Token 纪律</text>
-
-  <!-- L2 -->
-  <rect x="358" y="250" width="426" height="118" rx="10" fill="#FBFBF8" stroke="#E4E3DD"/>
-  <text x="376" y="276" font-size="15" font-weight="700" fill="#5B6472">L2 长期记忆 · 遇到对应问题才读</text>
-  <text x="376" y="298" font-size="13.5" fill="#3A4763">project-brief.md　项目定位 / 技术栈 / 命令</text>
-  <text x="376" y="318" font-size="13.5" fill="#3A4763">architecture.md　模块地图 / “改什么去哪改”</text>
-  <text x="376" y="338" font-size="13.5" fill="#3A4763">conventions.md · code-index.md（代码地图）</text>
-  <text x="376" y="358" font-size="13.5" fill="#3A4763">glossary.md　术语表 / 统一语言（可选）</text>
-
-  <!-- L3 -->
-  <rect x="358" y="380" width="426" height="96" rx="10" fill="#EAF1FE" stroke="#9BBBF4"/>
-  <text x="376" y="408" font-size="15" font-weight="700" fill="#2B4C8C">L3 工作记忆 · 每个新会话必读</text>
-  <text x="376" y="432" font-size="13.5" fill="#3A4763">HANDOFF.md — 进度 / 下一步 / 陷阱 / 改动清单</text>
-  <text x="376" y="456" font-size="13.5" fill="#3A4763">decisions/ — 重大决策记录 ADR</text>
-
-  <rect x="358" y="490" width="426" height="26" rx="8" fill="#F0F5FF"/>
-  <text x="571" y="508" font-size="13" font-weight="600" fill="#2B4C8C" text-anchor="middle">新会话固定开销 ≈ 1000 tokens（只读 L1 + L3）</text>
-
-  <!-- Right: token compare -->
-  <rect x="850" y="120" width="312" height="410" rx="14" fill="#FFFFFF" stroke="#E4E3DD"/>
-  <text x="872" y="156" font-size="17" font-weight="700" fill="#1A1B1C">为什么省 Token</text>
-
-  <rect x="872" y="174" width="268" height="118" rx="10" fill="#FBEAEA"/>
-  <text x="890" y="202" font-size="14" font-weight="700" fill="#B4444C">旧路线</text>
-  <text x="890" y="228" font-size="13" fill="#8A3A40">每换一个工具 / 模型</text>
-  <text x="890" y="250" font-size="13" fill="#8A3A40">全仓遍历、逐个读源码猜结构</text>
-  <text x="890" y="272" font-size="13" fill="#8A3A40">上下文反复燃烧，还重踩旧坑</text>
-
-  <path d="M1006,298 L1006,322" stroke="#3FA083" stroke-width="2" marker-end="url(#arrowGreen)"/>
-
-  <rect x="872" y="328" width="268" height="118" rx="10" fill="#E7F4EF"/>
-  <text x="890" y="356" font-size="14" font-weight="700" fill="#2F7D66">新路线</text>
-  <text x="890" y="382" font-size="13" fill="#2C6B58">读 L1+L3 约 1000 token 恢复现场</text>
-  <text x="890" y="404" font-size="13" fill="#2C6B58">按 code-index 定位，只读目标文件</text>
-  <text x="890" y="426" font-size="13" fill="#2C6B58">交接只传状态，不传对话过程</text>
-
-  <g font-size="12.5" fill="#5B6472">
-    <circle cx="884" cy="468" r="3.5" fill="#94D8C3"/>
-    <text x="894" y="472">一份规则，N 个工具同时生效</text>
-    <circle cx="884" cy="492" r="3.5" fill="#94D8C3"/>
-    <text x="894" y="496">索引定位，替代盲扫</text>
-    <circle cx="884" cy="516" r="3.5" fill="#94D8C3"/>
-    <text x="894" y="520">doctor 体检，防止上下文腐化</text>
+  <!-- L3 工作记忆 -->
+  <rect x="150" y="500" width="900" height="118" rx="8" fill="url(#boxL3)" opacity="0.35" stroke="#d29922"/>
+  <text x="170" y="524" fill="#e3b341" font-size="13" font-weight="600">L3 工作记忆（每个新会话必读，收工自动更新）</text>
+  <g font-size="12.5" fill="#e6edf3">
+    <rect x="170" y="538" width="280" height="60" rx="6" fill="#0d1421" stroke="#d29922"/>
+    <text x="310" y="562" text-anchor="middle" font-weight="600">HANDOFF.md</text>
+    <text x="310" y="582" text-anchor="middle" fill="#8b98a9" font-size="11">当前任务 · 进度 · 下一步 · 临时陷阱 · 本次改动</text>
+    <rect x="460" y="538" width="220" height="60" rx="6" fill="#0d1421" stroke="#d29922"/>
+    <text x="570" y="562" text-anchor="middle" font-weight="600">decisions/</text>
+    <text x="570" y="582" text-anchor="middle" fill="#8b98a9" font-size="11">ADR 重大决策，只记"为什么"</text>
+    <rect x="690" y="538" width="345" height="60" rx="6" fill="#0d1421" stroke="#30363d"/>
+    <text x="862" y="562" text-anchor="middle" fill="#8b98a9" font-size="11">HANDOFF 超 120 行自动归档到 archive/</text>
+    <text x="862" y="582" text-anchor="middle" fill="#8b98a9" font-size="11">只传状态不传过程，固定开销始终可控</text>
   </g>
 
-  <!-- Bottom loop -->
-  <text x="40" y="588" font-size="14" font-weight="600" fill="#6B7280">日常闭环（AI 自动执行，用户零命令）</text>
-  <g font-size="14.5" font-weight="600" fill="#2B4C8C">
-    <rect x="40" y="604" width="220" height="58" rx="29" fill="#EAF1FE" stroke="#9BBBF4"/>
-    <text x="150" y="639" text-anchor="middle">① Resume 自动恢复现场</text>
-    <rect x="490" y="604" width="220" height="58" rx="29" fill="#EAF1FE" stroke="#9BBBF4"/>
-    <text x="600" y="639" text-anchor="middle">② Develop 按索引改码</text>
-    <rect x="940" y="604" width="220" height="58" rx="29" fill="#EAF1FE" stroke="#9BBBF4"/>
-    <text x="1050" y="639" text-anchor="middle">③ Handoff 压缩交接</text>
+  <!-- 底部：场景标签 -->
+  <g font-size="12.5">
+    <rect x="80" y="670" width="250" height="60" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="205" y="695" text-anchor="middle" fill="#58a6ff" font-weight="600">换工具/换模型</text>
+    <text x="205" y="715" text-anchor="middle" fill="#8b98a9" font-size="11">不重读全仓，5 秒恢复现场</text>
+
+    <rect x="345" y="670" width="250" height="60" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="470" y="695" text-anchor="middle" fill="#58a6ff" font-weight="600">跨时间冬眠后苏醒</text>
+    <text x="470" y="715" text-anchor="middle" fill="#8b98a9" font-size="11">隔几周/几月回来，HANDOFF 接着干</text>
+
+    <rect x="610" y="670" width="250" height="60" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="735" y="695" text-anchor="middle" fill="#58a6ff" font-weight="600">跨人团队交接</text>
+    <text x="735" y="715" text-anchor="middle" fill="#8b98a9" font-size="11">.ai-dev 进 git，新人 clone 即接手</text>
+
+    <rect x="875" y="670" width="245" height="60" rx="10" fill="#161b27" stroke="#30363d"/>
+    <text x="997" y="695" text-anchor="middle" fill="#58a6ff" font-weight="600">接手遗产代码</text>
+    <text x="997" y="715" text-anchor="middle" fill="#8b98a9" font-size="11">AI 自动建索引+架构，快速建立心智模型</text>
   </g>
-  <g stroke="#7A9FD8" stroke-width="2" fill="none" marker-end="url(#arrow)">
-    <path d="M266,633 L482,633"/>
-    <path d="M716,633 L932,633"/>
-  </g>
-  <path d="M1050,662 C1050,694 150,694 150,662" stroke="#B9CDEC" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#arrow)"/>
-  <text x="600" y="708" font-size="12.5" fill="#8A93A6" text-anchor="middle">切换 IDE 或模型时闭环：新工具从 ③ 的交接状态继续，如同同一个 AI 从未离开</text>
+
+  <text x="600" y="770" text-anchor="middle" fill="#8b98a9" font-size="12">新会话固定开销 ≈ START_HERE + HANDOFF（约 1k token），其余 L2 与源码按需、按 code-index 定位精读</text>
+  <text x="600" y="795" text-anchor="middle" fill="#58a6ff" font-size="12">一份规则只存一处 · 薄指针指向 .ai-dev · 改一次所有工具同时生效 · doctor 体检防腐</text>
 </svg>
