@@ -1,0 +1,13 @@
+# 统一上下文入口（由 devctx 自动生成，请勿在此编写项目规则）
+
+本项目唯一事实源在 `.ai-dev/`。以下协议**自动执行，不需要用户提醒**：
+
+- 接到任务 / 新会话开始：自动读 `.ai-dev/START_HERE.md` 与 `.ai-dev/HANDOFF.md`，
+  沿 HANDOFF「下一步动作」继续；用一两句话说明你理解的现状即可，不打断用户，
+  发现文档与代码矛盾时以代码为准并回写 HANDOFF。
+- 动手改代码前：先查 `.ai-dev/code-index.md` 定位，并遵守 `.ai-dev/conventions.md`。
+- 任务闭环 / 用户说"收工/切换/结束"时：**自动**更新 `.ai-dev/HANDOFF.md`
+  （进度、下一步、陷阱、改动文件清单）；增删/移动过源码文件时按 START_HERE §3 更新 code-index.md。
+- 项目规则、架构、进度一律写回 `.ai-dev/` 对应文件；不要写在本文件，本文件会被同步脚本覆盖。
+
+<!-- devctx:pointer -->
