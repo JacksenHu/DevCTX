@@ -38,20 +38,17 @@ COPY_MAP = {
 
 
 def detect_stack(root: Path) -> dict:
-    """Auto-detect tech stack from root-level marker files.
-
-    Returns a dict with keys: language, framework, storage, deploy, commands.
-    Only fills what can be inferred from files; everything else stays "待确认".
-    """
+    """Auto-detect tech stack from root-level marker files."""
     info = {
         "language": "待确认",
         "framework": "待确认",
         "storage": "待确认",
         "deploy": "待确认",
         "commands": {},
+        "subprojects": [],
+        "env_vars": [],
     }
 
-    # --- Node.js / JavaScript / TypeScript ---
     pkg = root / "package.json"
     if pkg.is_file():
         try:
@@ -74,20 +71,14 @@ def detect_stack(root: Path) -> dict:
         except Exception:
             pass
 
-    # --- Python ---
     if (root / "pyproject.toml").is_file() or (root / "requirements.txt").is_file() \
             or (root / "setup.py").is_file():
         info["language"] = "Python"
-        # detect framework
         for f in ("requirements.txt", "pyproject.toml"):
             p = root / f
             if not p.is_file():
                 continue
             txt = read_text(p).lower()
-            for fw in ("django", "flask", "fastapi", "tornado", "bottle"):
-                if fw in txt:
-                    info["framework"] = fw.capitalize() if fw != "fastapi" else "FastAPI"
-                    break
             if "fastapi" in txt:
                 info["framework"] = "FastAPI"
             elif "django" in txt:
@@ -100,19 +91,61 @@ def detect_stack(root: Path) -> dict:
         if "lint" not in info["commands"]:
             info["commands"]["lint"] = "ruff check . && ruff format --check ."
 
-    # --- Go ---
     if (root / "go.mod").is_file():
         info["language"] = "Go"
         info["commands"]["build"] = "go build ./..."
         info["commands"]["test"] = "go test ./..."
 
-    # --- Rust ---
     if (root / "Cargo.toml").is_file():
         info["language"] = "Rust"
         info["commands"]["build"] = "cargo build"
         info["commands"]["test"] = "cargo test"
 
-    # --- Deployment / CI markers ---
+    for parent_dir in ("packages", "apps", "services", "modules"):
+        parent = root / parent_dir
+        if not parent.is_dir():
+            continue
+        for child in sorted(parent.iterdir()):
+            if not child.is_dir() or child.name.startswith(".") or child.name.startswith("__"):
+                continue
+            sub_lang = None
+            sub_framework = None
+            if (child / "package.json").is_file():
+                try:
+                    sub_data = json.loads(read_text(child / "package.json"))
+                    sub_lang = "TypeScript" if any(
+                        "typescript" in k for k in {**sub_data.get("dependencies", {}),
+                                                     **sub_data.get("devDependencies", {})}
+                    ) else "JavaScript"
+                    sub_deps = {**sub_data.get("dependencies", {}), **sub_data.get("devDependencies", {})}
+                    fw = [k for k in sub_deps if k in ("next", "react", "vue", "nuxt", "svelte", "express", "nestjs")]
+                    sub_framework = ", ".join(fw) if fw else None
+                except Exception:
+                    sub_lang = "JavaScript"
+            elif (child / "requirements.txt").is_file() or (child / "pyproject.toml").is_file():
+                sub_lang = "Python"
+            elif (child / "go.mod").is_file():
+                sub_lang = "Go"
+            elif (child / "Cargo.toml").is_file():
+                sub_lang = "Rust"
+            if sub_lang:
+                entry = f"{parent_dir}/{child.name}"
+                if sub_framework:
+                    entry += f" ({sub_lang}, {sub_framework})"
+                else:
+                    entry += f" ({sub_lang})"
+                info["subprojects"].append(entry)
+
+    env_example = root / ".env.example"
+    if env_example.is_file():
+        for line in read_text(env_example).splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key = line.split("=", 1)[0].strip()
+                info["env_vars"].append(key)
+
     deploy_markers = []
     if (root / "Dockerfile").is_file():
         deploy_markers.append("Docker")
@@ -127,7 +160,6 @@ def detect_stack(root: Path) -> dict:
 
 
 def fill_project_brief(template: str, root: Path) -> str:
-    """Inject auto-detected stack info into the project-brief template."""
     info = detect_stack(root)
     stack_table = (
         "| 层  | 选型 | 版本 | 备注 |\n"
@@ -138,7 +170,6 @@ def fill_project_brief(template: str, root: Path) -> str:
         f"| 部署 | {info['deploy']} | — | 自动检测部署方式 |\n"
     )
 
-    # build commands block
     cmd_lines = []
     cmd_map = {
         "install": "# 安装依赖",
@@ -154,7 +185,6 @@ def fill_project_brief(template: str, root: Path) -> str:
             cmd_lines.append(comment + "\n# 待确认")
     commands_block = "\n\n".join(cmd_lines)
 
-    # replace the empty stack table
     old_table = (
         "| 层  | 选型 | 版本 | 备注 |\n"
         "| -- | -- | -- | -- |\n"
@@ -165,13 +195,42 @@ def fill_project_brief(template: str, root: Path) -> str:
     )
     template = template.replace(old_table, stack_table)
 
-    # replace the empty commands block
     old_cmds = re.search(
         r"```text\n# 安装依赖\n\n# 本地运行\n\n# 运行测试\n\n# 代码检查 / 格式化\n\n# 构建 / 部署\n```",
         template,
     )
     if old_cmds:
         template = template[:old_cmds.start()] + "```text\n" + commands_block + "\n```" + template[old_cmds.end():]
+
+    if info["subprojects"]:
+        old_dirs = (
+            "## 顶层目录结构\n\n"
+            "- `src/` — <!-- 主源码目录职责 -->\n"
+            "- `tests/` — <!-- 测试目录职责 -->\n"
+        )
+        new_dirs = "## 顶层目录结构\n\n"
+        for sp in info["subprojects"]:
+            new_dirs += f"- `{sp}/` — 自动检测的子项目\n"
+        new_dirs += "- `src/` — <!-- 主源码目录职责（如无 monorepo 则保留） -->\n"
+        new_dirs += "- `tests/` — <!-- 测试目录职责 -->\n"
+        template = template.replace(old_dirs, new_dirs)
+
+    if info["env_vars"]:
+        old_env = (
+            "## 环境与外部依赖\n\n"
+            "- 环境变量样例位置：\n"
+            "- 必需外部服务：\n"
+            "- 密钥获取方式：\n"
+        )
+        env_list = "\n".join(f"  - `{v}`" for v in info["env_vars"])
+        new_env = (
+            "## 环境与外部依赖\n\n"
+            f"- 环境变量样例位置：`.env.example`（自动检测到以下变量）\n"
+            f"{env_list}\n"
+            "- 必需外部服务：\n"
+            "- 密钥获取方式：\n"
+        )
+        template = template.replace(old_env, new_env)
 
     return template
 
@@ -205,7 +264,6 @@ def init(root: Path, mode: str, force: bool) -> int:
         write_text(dest, text)
         print(f"[+] created {AI_DEV_DIR}/{dest_rel}")
 
-    # first code index (non-fatal if it fails)
     r = subprocess.run(
         [sys.executable, str(Path(__file__).parent / "build_index.py"), str(root)],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -214,7 +272,6 @@ def init(root: Path, mode: str, force: bool) -> int:
     if r.returncode != 0:
         print(r.stderr.strip(), file=sys.stderr)
 
-    # pointer files for detected/all tools
     print("\n-- syncing tool pointer files --")
     actions = sync_rules.sync(root, mode=mode)
     sync_rules._print_report(actions)

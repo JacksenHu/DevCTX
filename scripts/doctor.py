@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Health check for a project onboarded with devctx.
-
-Checks: required context files present, L2 docs actually drafted (not blank
-templates), code-index fresh vs source mtimes, HANDOFF within size budget,
-tool pointers in sync, .ai-dev not accidentally git-ignored.
-
-Usage:
-  doctor.py [project]            report only; exit 0=healthy 1=warnings 2=errors
-  doctor.py [project] --fix      auto-fix what is safely fixable
-"""
+"""Health check for a project onboarded with devctx."""
 
 from __future__ import annotations
 
@@ -33,20 +24,19 @@ REQUIRED = [
     "architecture.md", "conventions.md", "ignore.conf",
 ]
 L2_DOCS = ["project-brief.md", "architecture.md", "conventions.md"]
-OPTIONAL_DOCS = ["glossary.md", "lessons.md"]  # present-only: absence is fine, blank template warns
+OPTIONAL_DOCS = ["glossary.md", "lessons.md"]
 HANDOFF_LIMIT = 120
-FILLED_RATIO = 0.25  # <25% of lines differ from shipped template => still a template
+FILLED_RATIO = 0.25
 
 
 @dataclass
 class Finding:
-    level: str          # ok | warn | err
+    level: str
     area: str
     msg: str
 
 
 def _edit_ratio(text: str, template: str) -> float:
-    """Share of current lines that differ from the shipped template (0=unchanged)."""
     def norm(s: str) -> list[str]:
         s = s.replace("{{DATE}}", "x").replace("{{PROJECT_NAME}}", "x")
         return [ln.strip() for ln in s.splitlines() if ln.strip()]
@@ -76,7 +66,7 @@ def check_files(ai: Path, fix: bool) -> list[Finding]:
             out.append(Finding("ok", "files", f"created missing: {', '.join(missing)}"))
         else:
             out.append(Finding("err", "files",
-                               f"missing {', '.join(missing)}; rerun with --fix"))
+                               f"missing {', '.join(missing)}; rerun with --fix")))
     else:
         out.append(Finding("ok", "files", "all required context files present"))
 
@@ -95,7 +85,7 @@ def check_files(ai: Path, fix: bool) -> list[Finding]:
     for name in OPTIONAL_DOCS:
         p, tpl = ai / name, init_project.TEMPLATES / name
         if not p.exists():
-            continue  # optional: absence is not a finding
+            continue
         ratio = _edit_ratio(read_text(p), read_text(tpl)) if tpl.exists() else 1.0
         if ratio < FILLED_RATIO:
             out.append(Finding("warn", "L2 docs",
@@ -162,7 +152,7 @@ def check_pointers(root: Path, fix: bool) -> list[Finding]:
             return [Finding("ok", "pointers",
                             "synced: " + ", ".join(a.rel for a in changed))]
         return [Finding("ok", "pointers", f"{len(actions)} pointer(s) already in sync")]
-    actions = sync_rules.sync(root, mode="detected", check=True)  # read-only
+    actions = sync_rules.sync(root, mode="detected", check=True)
     bad = [a for a in actions if a.status in ("missing", "conflict")]
     if bad:
         detail = "; ".join(f"{a.rel}:{a.status}" for a in bad)
@@ -174,11 +164,24 @@ def check_git(root: Path) -> list[Finding]:
     gi = root / ".gitignore"
     if not gi.exists():
         return [Finding("ok", "git", "no .gitignore (project may not use git yet)")]
-    text = read_text(gi).lstrip("\ufeff")  # tolerate UTF-8 BOM (common on Windows)
+    text = read_text(gi).lstrip("\ufeff")
     if re.search(r"^\s*\.ai-dev\b", text, re.M):
         return [Finding("warn", "git",
                         ".ai-dev is git-ignored: shared context will NOT reach teammates/tools")]
     return [Finding("ok", "git", ".ai-dev is not ignored")]
+
+
+def check_schema(ai: Path) -> list[Finding]:
+    sh = ai / "START_HERE.md"
+    if not sh.is_file():
+        return []
+    head = read_text(sh)[:500]
+    if "devctx-schema:" in head:
+        m = re.search(r"devctx-schema:\s*(\S+)", head)
+        ver = m.group(1) if m else "unknown"
+        return [Finding("ok", "schema", f"START_HERE schema version: {ver}")]
+    return [Finding("warn", "schema",
+                    "START_HERE.md has no devctx-schema marker; old project, rerun init with --force to update")]
 
 
 def run_doctor(root: Path, fix: bool) -> list[Finding]:
@@ -192,6 +195,7 @@ def run_doctor(root: Path, fix: bool) -> list[Finding]:
     findings += check_handoff(ai, root, fix)
     findings += check_pointers(root, fix)
     findings += check_git(root)
+    findings += check_schema(ai)
     return findings
 
 

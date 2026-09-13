@@ -4,6 +4,36 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-13
+
+### Added
+- `init_project.py` 自动检测技术栈：
+  - 检测 package.json / requirements.txt / pyproject.toml / go.mod / Cargo.toml，自动填语言和框架
+  - 自动识别 npm scripts、pytest、ruff、go build/test、cargo build/test 等常用命令
+  - 自动检测 Dockerfile / docker-compose / .github/workflows 部署方式
+  - **monorepo 支持**：扫描 `packages/*` / `apps/*` / `services/*` / `modules/*`，自动记录子项目技术栈
+  - **.env.example 检测**：自动读取环境变量名，预填到 project-brief
+- `HANDOFF.md` 下一步动作改为 checkbox 列表：完成即勾选，不用每次重写整段
+- `START_HERE.md` 顶部加 `<!-- devctx-schema: v1 -->` 版本标记
+- `doctor.py` 新增 schema 版本检查：老项目没有版本标记时警告
+- `conventions.md` 模板加具体 Conventional Commits 示例
+
+### Changed
+- speckit 联动文档修正为推荐官方 [github/spec-kit](https://github.com/github/spec-kit)，dceoy 包降级为可选
+- 项目改名 cross-ide-dev-context → devctx
+
+## [0.2.0] - 2026-09-13
+
+### Added
+- 与 [github/spec-kit](https://github.com/github/spec-kit) 文件系统对接：
+  - HANDOFF 模板新增"进行中的 spec"字段
+  - handoff 时自动读 specs/*/tasks.md 勾选状态算进度
+  - README speckit 联动节重写
+
+### Changed
+- 项目改名 cross-ide-dev-context → devctx（6 字符）
+- marker 从 cross-ide-dev-context:begin → devctx:begin
+
 ## [0.1.3] - 2026-09-12
 
 ### Added

@@ -1,7 +1,7 @@
 # Conventions — 开发约定（所有工具统一遵守）
 
 > 本文件是跨 IDE / 跨模型的**统一行为规范**。任何工具生成的代码都必须满足这里的硬性约定；
-> 与本文件冲突的“模型个人习惯”一律无效。约定要少而硬，只写真正会反复踩的规则，不写语言教科书。
+> 与本文件冲突的"模型个人习惯"一律无效。约定要少而硬，只写真正会反复踩的规则，不写语言教科书。
 
 ## 代码风格
 
@@ -28,8 +28,16 @@
 
 ## 分支与提交
 
-- 分支命名：<!-- 例: feature/ fix/ chore/ + 短横线描述 -->
-- 提交信息：<!-- 例: Conventional Commits: feat/fix/refactor/test/docs/chore(scope): 摘要 -->
+- 分支命名：<!-- 例: feature/ login-refactor, fix/ null-token-crash, chore/ bump-deps -->
+- 提交信息（Conventional Commits）：
+  ```text
+  feat(auth): add JWT refresh token endpoint
+  fix(login): prevent null pointer on expired session
+  refactor(db): extract user repository
+  test(auth): add unit tests for token refresh
+  docs(readme): update install instructions
+  chore: bump ruff to 0.4
+  ```
 - 提交粒度：<!-- 例: 一次提交只做一件事，禁止混合格式化与逻辑改动 -->
 
 ## AI 协作特别约定（重要）
