@@ -1,9 +1,9 @@
 ---
 name: devctx
-description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库。"
+description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
 ---
 
-# devctx — 跨工具无缝开发协议
+# Cross-IDE Dev Context — 跨工具无缝开发协议
 
 ## 第一原则：用户零命令、零设置
 
@@ -31,6 +31,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 | 难以逆转的选型/架构决定 | **decision**（ADR） | 用户意图 |
 | 新装工具、指针被覆盖、用户问"状态/正常吗/检查一下" | **doctor / sync** | 用户意图或 AI 自动 |
 | HANDOFF 超约 120 行 | **archive** | AI 自动 |
+| 用户说"用 spec/sdd/speckit 做 XXX" | **speckit 全链**（见 §6） | 用户意图 |
 
 ## 1. init 全链（每个项目一次，AI 自动完成）
 
@@ -86,6 +87,38 @@ scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模�
 ## 5. decision（ADR）
 
 复制 `decisions/0000-template.md` 为 `NNNN-短标题.md`，记背景、备选、决策、后果，只记"为什么"。
+
+## 6. speckit / Spec Kit 联动（用户说"用 spec 做 XXX"时自动执行）
+
+本技能内置 [github/spec-kit](https://github.com/github/spec-kit) 规格驱动开发（SDD）流程。用户只装 devctx，说"用 spec/sdd/speckit 做 XXX"即可自动跑完整流程，不需要单独安装 spec-kit skill。
+
+### 前置检查（AI 自动）
+
+1. `specify version` 确认 CLI 可用；不存在则提示用户跑 `uv tool install specify-cli`（这一步需要用户执行一次，因为需要 uv）。
+2. 项目已完成 devctx init（`.ai-dev/` 存在）；没有则先跑 §1 init。
+3. 项目没有 `.specify/` 时，自动跑 `specify init . --integration copilot`（或当前 agent 对应的 integration）。
+
+### 自动流程
+
+| 阶段 | AI 做什么 | 产物 |
+|---|---|---|
+| **spec** | 从用户需求提炼 2-4 词短名，创建 `specs/<NNN-短名>/spec.md`，填用户场景（P1/P2/P3 + Given/When/Then）、功能需求、成功指标 | spec.md |
+| **plan** | 读 spec.md，写技术方案、架构决策、实施步骤、验证方式 | plan.md |
+| **tasks** | 读 plan.md，拆任务清单：每个任务含依赖、并行标记 [P]、TDD 验收标准 | tasks.md |
+| **implement** | 按 tasks.md 依赖顺序执行，每完成一个勾 `[x]`，跑测试验证 | 代码 + 勾选 tasks.md |
+
+### handoff 自动同步
+
+handoff 时自动读 `specs/<进行中名>/tasks.md`，数勾选数量（已完成 N / 共 M 条），写进 HANDOFF 元信息：
+> 进行中的 spec：`specs/003-login-refactor/tasks.md` 第 3/7 条（正在做"拖拽排序"）
+
+换工具后新 AI 读 HANDOFF 就知道在 spec 流程哪一步，不用重读整个 spec。
+
+### 注意
+
+- spec.md / plan.md / tasks.md 归 `specs/`，不要复制进 `.ai-dev/`。
+- 项目原则（constitution）在 `.specify/memory/constitution.md`，每阶段开始前读并遵守。
+- spec-kit 是 MIT 许可证，与本项目无冲突。
 
 ## Token 经济硬规则
 
