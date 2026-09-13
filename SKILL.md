@@ -1,6 +1,6 @@
 ---
 name: devctx
-description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：init 时自动扫描项目现状把已完成和未完成的功能全部 spec 化；用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引，并自动 spec 化项目现状；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
+description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：init 时自动扫描项目现状把已完成和未完成的功能全部 spec 化；用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。不需要单独装 spec-kit CLI，AI 直接写 spec 文件。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引，并自动 spec 化项目现状；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
 ---
 
 # Cross-IDE Dev Context — 跨工具无缝开发协议
@@ -91,13 +91,14 @@ scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模�
 
 ## 6. speckit / Spec Kit 联动（用户说"用 spec 做 XXX"时自动执行）
 
-本技能内置 [github/spec-kit](https://github.com/github/spec-kit) 规格驱动开发（SDD）流程。用户只装 devctx，说"用 spec/sdd/speckit 做 XXX"即可自动跑完整流程，不需要单独安装 spec-kit skill。
+本技能内置 [github/spec-kit](https://github.com/github/spec-kit) 规格驱动开发（SDD）流程。用户只装 devctx，说"用 spec/sdd/speckit 做 XXX"即可自动跑完整流程。**不需要单独装 spec-kit CLI**——CLI 只是提供模板的便利工具，AI 自己就能写 spec 文件。
 
 ### 前置检查（AI 自动）
 
-1. `specify version` 确认 CLI 可用；不存在则提示用户跑 `uv tool install specify-cli`（这一步需要用户执行一次，因为需要 uv）。
-2. 项目已完成 devctx init（`.ai-dev/` 存在）；没有则先跑 §1 init。
-3. 项目没有 `.specify/` 时，自动跑 `specify init . --integration copilot`（或当前 agent 对应的 integration）。
+1. 项目已完成 devctx init（`.ai-dev/` 存在）；没有则先跑 §1 init。
+2. 检查 specify CLI 是否可用（`specify version`）：
+   - **有 CLI**：自动跑 `specify init . --integration copilot`（如无 `.specify/`），用官方模板和脚本。
+   - **没 CLI**：不强制安装，AI 直接手写 spec.md / plan.md / tasks.md，功能完全一样。用户想以后装了再补 `.specify/` 也行。
 
 ### 自动流程
 
