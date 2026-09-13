@@ -1,6 +1,6 @@
 ---
 name: devctx
-description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
+description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：init 时自动扫描项目现状把已完成和未完成的功能全部 spec 化；用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引，并自动 spec 化项目现状；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
 ---
 
 # Cross-IDE Dev Context — 跨工具无缝开发协议
@@ -39,8 +39,9 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 2. 脚本会：建 `.ai-dev/`（模板来自 `assets/templates/`，不覆盖已有文件）、生成首份 code-index、给在用工具写指针。
 3. **脚本跑完不是结束**：你必须继续自动完成，不许把空模板留给用户——
    - 以 code-index 为地图扫描真实代码，**亲自起草** project-brief / architecture / conventions / glossary（术语表只留会被猜错的业务黑话与缩写）/ lessons（永久教训，初始可空）：事实只来自代码与用户陈述，不确定写"待确认"，禁止编造版本、命令、目录；
+   - **项目现状 spec 化**：扫描代码里的 TODO / FIXME / XXX、raise NotImplementedError、空函数、半成品模块；扫 git log 最近方向。把发现的功能逐个写进 specs/：已完成的写 spec.md（标注状态"已完成"），未完成的完整跑 spec → plan → tasks（见 §6）；不确定的标 [待确认]；
    - 起草后把"仅靠代码定不了、又会改变后续方向"的关键问题（真实运行命令、业务术语含义、本期边界）**一次性集中**向用户确认，不逐条打断、不为问而问；
-   - architecture 要写出模块分区与"改什么去哪改"速查；HANDOFF 写入初始状态；
+   - architecture 要写出模块分区与"改什么去哪改"速查；HANDOFF 写入初始状态，元信息"进行中的 spec"列出所有未闭环的 spec；
    - 补项目特有忽略到 `.ai-dev/ignore.conf`（部署运行时目录、构建产物、凭据目录），重建一次索引；
    - 跑一次 `doctor.py --fix` 确认全绿。
 4. 用一句话向用户交付："已接入，以后直接提需求；换其他 IDE 新开会话即自动接续"，并说明哪些项待他决策（如 git、过期凭据），不罗列过程。
