@@ -1,13 +1,14 @@
 # devctx
 
-[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](scripts/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](scripts/)
 
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型 / 时间 / 人之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token、不重复踩旧坑。
+> 内置 **Spec Kit（SDD）**：init 时自动把项目现状 spec 化，说"用 spec 做 XXX"自动跑完整规格驱动开发流程。
 >
-> 最新版本 **v0.1.3** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新版本 **v0.4.0** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
 ![跨 IDE 统一上下文机制图解](docs/context-architecture.svg)
 
@@ -116,14 +117,14 @@ devctx/
 │   ├── build_index.py           # 生成代码地图（尊重 .gitignore 与 ignore.conf）
 │   ├── sync_rules.py            # 生成/校验/注入各工具薄指针（幂等）
 │   ├── archive_handoff.py       # 安全归档超长 HANDOFF 历史
-│   ├── doctor.py                # 健康体检 + --fix 自动修复
+│   ├── doctor.py                 # 健康体检 + --fix 自动修复
 │   └── _common.py               # 工具映射表、项目根探测、忽略匹配
 ├── assets/templates/            # 初始化时复制进项目的自包含模板
 │   ├── START_HERE.md            # L1 入口
 │   ├── HANDOFF.md               # L3 工作记忆
 │   ├── project-brief.md         # L2：项目定位/运行命令
 │   ├── architecture.md          # L2：模块分区/改什么去哪改
-│   ├── conventions.md           # L2：编码/命名/提交规范
+│   ├── conventions.md            # L2：编码/命名/提交规范
 │   ├── glossary.md              # L2：业务术语表（可选）
 │   ├── lessons.md               # L2：永久教训（可选）
 │   └── decisions/0000-template.md
@@ -162,17 +163,9 @@ devctx **内置** [github/spec-kit](https://github.com/github/spec-kit)（GitHub
 
 speckit 管"这次新需求怎么做"（spec → plan → tasks → implement），devctx 管"项目长期记忆怎么跨工具保持"（`.ai-dev/`），两者通过文件系统对接。
 
-### 怎么用（3 步）
+### 怎么用（2 步）
 
-**第 1 步：装 specify CLI（全局一次）**
-
-```bash
-uv tool install specify-cli
-```
-
-> 这是唯一需要你手动跑的命令。需要先装 [uv](https://docs.astral.sh/uv/)。CLI 是 MIT 许可证，与 devctx 无冲突。
-
-**第 2 步：在项目里对 AI 说一句话**
+**第 1 步：在项目里对 AI 说一句话**
 
 > "用 spec 做个登录功能"
 
@@ -185,7 +178,9 @@ devctx 自动完成：
 | tasks | 拆任务清单：依赖、并行标记 [P]、TDD 验收标准 | `specs/001-login/tasks.md` |
 | implement | 按 tasks.md 依赖顺序执行，每完成一个勾 `[x]` | 代码 + 勾选 tasks.md |
 
-**第 3 步：收工自动同步**
+> **不需要装 specify CLI**——AI 直接写 markdown 文件。如果你以后想用官方 CLI 的模板和脚本，可以跑 `uv tool install specify-cli` 增强，不是必需。
+
+**第 2 步：收工自动同步**
 
 handoff 时 AI 自动读 `tasks.md` 勾选状态，把进度写进 HANDOFF：
 > 进行中的 spec：`specs/001-login/tasks.md` 第 3/7 条（正在做"JWT 刷新"）
@@ -202,7 +197,7 @@ handoff 时 AI 自动读 `tasks.md` 勾选状态，把进度写进 HANDOFF：
 
 **不互相复制内容**，只写路径引用。
 
-> 第三方打包（dceoy/speckit-agent-skills、skills.sh）默认不需要——`specify init` 会自动生成对应平台的文件，devctx 已经把工作流写进 SKILL.md 了。
+> 第三方打包（dceoy/speckit-agent-skills、skills.sh）默认不需要——devctx 已经把工作流写进 SKILL.md 了。
 
 ## 与其他工程流程 skill 的关系
 

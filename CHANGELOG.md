@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-14
+
+### Added
+- **内置 Spec Kit SDD 工作流**：用户只装 devctx，说"用 spec 做 XXX"自动跑 spec → plan → tasks → implement 完整流程
+  - 不需要单独装 spec-kit skill
+  - 不需要 specify CLI（AI 直接写 markdown 文件，CLI 是可选增强）
+  - handoff 自动读 tasks.md 勾选状态算进度
+- **init 自动 spec 化项目现状**：
+  - 扫描 TODO / FIXME / XXX、raise NotImplementedError、空函数、半成品模块
+  - 扫 git log 最近方向
+  - 已完成的功能写 spec.md（标"已完成"）
+  - 未完成的功能完整跑 spec → plan → tasks
+  - 不确定的标 [待确认]
+
+### Changed
+- README speckit 联动节重写：从"两个 skill 各自安装"改为"devctx 内置，用户只装一个"
+- SKILL.md frontmatter description 加 spec 触发词
+
 ## [0.3.0] - 2026-09-13
 
 ### Added
