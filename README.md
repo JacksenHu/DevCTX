@@ -156,36 +156,53 @@ python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 �
 7. **统一语言**：业务术语只在 `glossary.md` 定义一次，所有文档和代码命名引用它，跨工具说同一种话、省 token。
 8. **失败分层**：临时坑写 HANDOFF（易失），重复踩第二次提升到 lessons.md（持久），AI 不重复交学费。
 
-## 与 speckit / Spec Kit 规格驱动开发联动
+## 与 speckit / Spec Kit 规格驱动开发（SDD）联动
 
-本项目可与 [github/spec-kit](https://github.com/github/spec-kit)（GitHub 官方 spec 驱动开发工具）无缝配合：speckit 管"这次新需求怎么做"（constitution → specify → clarify → plan → tasks → implement，产出在 `specs/<名>/`），本项目管"项目长期记忆怎么跨工具保持"（产出在 `.ai-dev/`）。
+devctx **内置** [github/spec-kit](https://github.com/github/spec-kit)（GitHub 官方 spec 驱动开发工具）工作流。你只装 devctx 一个 skill，说"用 spec 做 XXX"就能自动跑完整 SDD 流程，不需要单独装 spec-kit skill。
 
-**两者不互相内嵌**：spec-kit 是 MIT，本项目也是 MIT，独立安装、通过文件系统对接。
+speckit 管"这次新需求怎么做"（spec → plan → tasks → implement），devctx 管"项目长期记忆怎么跨工具保持"（`.ai-dev/`），两者通过文件系统对接。
 
-### 怎么装（推荐官方版）
+### 怎么用（3 步）
+
+**第 1 步：装 specify CLI（全局一次）**
 
 ```bash
-# 1. 装 specify CLI（全局一次，需要 uv）
 uv tool install specify-cli
-
-# 2. 在项目里 init（每个项目一次，自动生成 .specify/ 和对应 agent 的 skill 文件）
-cd 你的项目
-specify init --here --integration claude   # 或 codex / cursor / copilot / gemini
 ```
 
-> dceoy/speckit-agent-skills 和 skills.sh 都是 spec-kit 的第三方打包分发，**默认不需要**——`specify init` 会自动生成对应平台的 skill 文件。只有你用的 agent 不在 spec-kit 支持列表里时，才考虑用第三方包。
+> 这是唯一需要你手动跑的命令。需要先装 [uv](https://docs.astral.sh/uv/)。CLI 是 MIT 许可证，与 devctx 无冲突。
 
-### 联动用法
+**第 2 步：在项目里对 AI 说一句话**
 
-1. **两个工具各自 init**：先让本项目建 `.ai-dev/`，再 `specify init --here --integration <agent>` 建 `.specify/` 与 `specs/`。
-2. **新需求直接说**：对 AI 说"用 speckit 做个 XXX"，自动走 constitution → specify → plan → tasks → implement。
-3. **新会话自动恢复**：AI 读 `.ai-dev/START_HERE` + `HANDOFF`；若项目里有 `specs/`，新会话读 HANDOFF 元信息里的"进行中的 spec"字段。
-4. **收工自动同步 spec 进度**：handoff 时 AI 自动列出 `specs/` 下未闭环的 spec，读 `tasks.md` 勾选状态算进度（已完成 N / 共 M 条），写入 HANDOFF：
-   > 进行中的 spec：`specs/login-refactor/tasks.md` 第 3/7 条（正在做"拖拽排序"）
-5. **换工具/换模型**：新 AI 读 HANDOFF → 知道在 speckit 流程哪一步 → 读对应 tasks 片段继续，不用重读整个 spec。
-6. **speckit 踩的坑**：某个流程坑（如"不要跳过 clarify 导致 plan 返工"）重复出现第二次，提升到 `.ai-dev/lessons.md`。
+> "用 spec 做个登录功能"
 
-一句话：**speckit 是施工图纸，本项目是工地交接手册；HANDOFF 记"图纸翻到第几页"，换工人不用重看全套图纸。**
+devctx 自动完成：
+
+| 阶段 | AI 做什么 | 产物 |
+|---|---|---|
+| spec | 提炼短名，写用户场景（P1/P2/P3 + Given/When/Then）、功能需求、成功指标 | `specs/001-login/spec.md` |
+| plan | 写技术方案、架构决策、实施步骤、验证方式 | `specs/001-login/plan.md` |
+| tasks | 拆任务清单：依赖、并行标记 [P]、TDD 验收标准 | `specs/001-login/tasks.md` |
+| implement | 按 tasks.md 依赖顺序执行，每完成一个勾 `[x]` | 代码 + 勾选 tasks.md |
+
+**第 3 步：收工自动同步**
+
+handoff 时 AI 自动读 `tasks.md` 勾选状态，把进度写进 HANDOFF：
+> 进行中的 spec：`specs/001-login/tasks.md` 第 3/7 条（正在做"JWT 刷新"）
+
+换工具/新会话后，新 AI 读 HANDOFF 就知道在 spec 流程哪一步，不用重读整个 spec。
+
+### 文件分工
+
+| 目录 | 谁维护 | 存什么 |
+|---|---|---|
+| `.ai-dev/` | devctx | 项目长期记忆（brief / architecture / conventions / HANDOFF） |
+| `specs/<名>/` | speckit | 本次需求的 spec / plan / tasks |
+| `.specify/` | specify CLI | 模板、脚本、项目原则（constitution） |
+
+**不互相复制内容**，只写路径引用。
+
+> 第三方打包（dceoy/speckit-agent-skills、skills.sh）默认不需要——`specify init` 会自动生成对应平台的文件，devctx 已经把工作流写进 SKILL.md 了。
 
 ## 与其他工程流程 skill 的关系
 
