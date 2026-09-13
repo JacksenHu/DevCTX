@@ -158,18 +158,32 @@ python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 �
 
 ## 与 speckit / Spec Kit 规格驱动开发联动
 
-本项目可与 [speckit-agent-skills](https://github.com/dceoy/speckit-agent-skills)（核心引擎 [github/spec-kit](https://github.com/github/spec-kit)）无缝配合：speckit 管"这次新需求怎么做"（constitution → specify → clarify → plan → tasks → implement，产出在 `specs/<名>/`），本项目管"项目长期记忆怎么跨工具保持"（产出在 `.ai-dev/`）。
+本项目可与 [github/spec-kit](https://github.com/github/spec-kit)（GitHub 官方 spec 驱动开发工具）无缝配合：speckit 管"这次新需求怎么做"（constitution → specify → clarify → plan → tasks → implement，产出在 `specs/<名>/`），本项目管"项目长期记忆怎么跨工具保持"（产出在 `.ai-dev/`）。
 
-**两者不互相内嵌**：speckit-agent-skills 是 AGPL-3.0，本项目是 MIT，独立安装、通过文件系统对接，避免许可证传染。新手只需装官方 spec-kit（`uv tool install specify-cli` 后 `specify init --here --integration <agent>`）；dceoy 仓库是预生成的 skills 包，可选。
+**两者不互相内嵌**：spec-kit 是 MIT，本项目也是 MIT，独立安装、通过文件系统对接。
+
+### 怎么装（推荐官方版）
+
+```bash
+# 1. 装 specify CLI（全局一次，需要 uv）
+uv tool install specify-cli
+
+# 2. 在项目里 init（每个项目一次，自动生成 .specify/ 和对应 agent 的 skill 文件）
+cd 你的项目
+specify init --here --integration claude   # 或 codex / cursor / copilot / gemini
+```
+
+> dceoy/speckit-agent-skills 和 skills.sh 都是 spec-kit 的第三方打包分发，**默认不需要**——`specify init` 会自动生成对应平台的 skill 文件。只有你用的 agent 不在 spec-kit 支持列表里时，才考虑用第三方包。
 
 ### 联动用法
 
-1. **两个工具各自独立 init**：先让本项目建 `.ai-dev/`，再 `specify init --here --integration <agent>` 建 `.specify/` 与 `specs/`。
-2. **新会话自动恢复**：AI 读 `.ai-dev/START_HERE` + `HANDOFF`；若项目里有 `specs/`，新会话读 HANDOFF 元信息里的"进行中的 spec"字段。
-3. **收工自动同步 spec 进度**：handoff 时 AI 自动列出 `specs/` 下未闭环的 spec，读 `tasks.md` 勾选状态算进度（已完成 N / 共 M 条），写入 HANDOFF：
+1. **两个工具各自 init**：先让本项目建 `.ai-dev/`，再 `specify init --here --integration <agent>` 建 `.specify/` 与 `specs/`。
+2. **新需求直接说**：对 AI 说"用 speckit 做个 XXX"，自动走 constitution → specify → plan → tasks → implement。
+3. **新会话自动恢复**：AI 读 `.ai-dev/START_HERE` + `HANDOFF`；若项目里有 `specs/`，新会话读 HANDOFF 元信息里的"进行中的 spec"字段。
+4. **收工自动同步 spec 进度**：handoff 时 AI 自动列出 `specs/` 下未闭环的 spec，读 `tasks.md` 勾选状态算进度（已完成 N / 共 M 条），写入 HANDOFF：
    > 进行中的 spec：`specs/login-refactor/tasks.md` 第 3/7 条（正在做"拖拽排序"）
-4. **换工具/换模型**：新 AI 读 HANDOFF → 知道在 speckit 流程哪一步 → 读对应 tasks 片段继续，不用重读整个 spec。
-5. **speckit 踩的坑**：某个流程坑（如"不要跳过 clarify 导致 plan 返工"）重复出现第二次，提升到 `.ai-dev/lessons.md`。
+5. **换工具/换模型**：新 AI 读 HANDOFF → 知道在 speckit 流程哪一步 → 读对应 tasks 片段继续，不用重读整个 spec。
+6. **speckit 踩的坑**：某个流程坑（如"不要跳过 clarify 导致 plan 返工"）重复出现第二次，提升到 `.ai-dev/lessons.md`。
 
 一句话：**speckit 是施工图纸，本项目是工地交接手册；HANDOFF 记"图纸翻到第几页"，换工人不用重看全套图纸。**
 
