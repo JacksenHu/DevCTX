@@ -10,7 +10,7 @@
 >
 > 最新版本 **v0.4.0** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
-![跨 IDE 统一上下文机制图解](docs/context-architecture.svg)
+![跨 IDE 统一上下文机制图解](docs/context-architecture.png)
 
 切换工具之所以贵，是因为 AI 对项目的认知只存在于**易失的对话历史**里——每换一个 IDE、一个模型、隔几周回来、或换个人接手，它都要重新遍历代码库、重新猜结构、重新踩一遍旧坑。
 
@@ -130,7 +130,7 @@ devctx/
 │   ├── lessons.md               # L2：永久教训（可选）
 │   └── decisions/0000-template.md
 ├── references/                  # 分层协议详解 & 各工具集成机制（AI 按需读）
-└── docs/context-architecture.svg
+└── docs/context-architecture.png
 ```
 
 使用者只与 `SKILL.md`（间接，通过对话触发）打交道；`scripts/`、`assets/`、`references/` 都由 AI 自行取用。
