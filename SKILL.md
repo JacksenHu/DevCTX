@@ -1,6 +1,6 @@
 ---
 name: devctx
-description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：init 时自动扫描项目现状把已完成和未完成的功能全部 spec 化；用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。不需要单独装 spec-kit CLI，AI 直接写 spec 文件。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引，并自动 spec 化项目现状；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
+description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 每轮对话结束或任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
 ---
 
 # Cross-IDE Dev Context — 跨工具无缝开发协议
@@ -26,7 +26,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 |---|---|---|
 | 项目没有 `.ai-dev/`，或用户要"多 IDE 统一/接入规范/无缝切换" | **init 全链** | 用户意图 |
 | 新会话、换 IDE/模型、"接着上次做" | **resume** | AI 自动 |
-| 任务闭环、要切工具/模型、用户说"收工" | **handoff** | AI 自动 |
+| 任务闭环、每轮对话结束、要切工具/模型、用户说"收工" | **handoff** | AI 自动 |
 | 增删/移动源码文件或模块 | **reindex**（必要时同步 architecture） | AI 自动 |
 | 难以逆转的选型/架构决定 | **decision**（ADR） | 用户意图 |
 | 新装工具、指针被覆盖、用户问"状态/正常吗/检查一下" | **doctor / sync** | 用户意图或 AI 自动 |
@@ -62,7 +62,9 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 3. 定位代码先查 code-index，只精读目标文件；文档与代码冲突以代码为准并回写文档。动手前先查 `lessons.md`。
 4. 工具不自动加载规则文件时，用 references/tool-integrations.md §4 的开场白兜底。
 
-## 3. handoff（任务闭环自动执行，省 token 的核心）
+## 3. handoff（每轮对话结束自动执行，省 token 的核心）
+
+**每轮对话结束都要写，不要等大任务完成。** 这是多会话并发、换 agent 不丢上下文的关键：每轮对话的工作都压缩进 HANDOFF，下一轮（无论哪个 agent、哪个工具、哪个会话）读 START_HERE + HANDOFF 就能无缝接续。
 
 按 HANDOFF 模板更新，取舍标准：**"下一个模型不知道它，会不会走错路或重复劳动？"**
 留：目标、可验证完成项、有序下一步、新约束/决策、失败路径、改动文件及原因；
@@ -91,7 +93,7 @@ scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模�
 
 ## 6. speckit / Spec Kit 联动（用户说"用 spec 做 XXX"时自动执行）
 
-本技能内置 [github/spec-kit](https://github.com/github/spec-kit) 规格驱动开发（SDD）流程。用户只装 devctx，说"用 spec/sdd/speckit 做 XXX"即可自动跑完整流程。**不需要单独装 spec-kit CLI**——CLI 只是提供模板的便利工具，AI 自己就能写 spec 文件。
+本技能内置 [github/spec-kit](https://github.com/github/spec-kit) 规格驱动开发（SDD）流程。用户只装 devctx，说"用 spec/sdd/speckit 做 XXX"即可自动跑完整流程，不需要单独安装 spec-kit skill。
 
 ### 前置检查（AI 自动）
 
