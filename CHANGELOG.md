@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-30
+
+### Changed
+- **handoff 频率改为每轮对话结束自动执行**（原"任务闭环"）：每轮对话的工作都压缩进 HANDOFF，下一轮（无论哪个 agent、哪个工具、哪个会话）读 START_HERE + HANDOFF 就能无缝接续。这是多会话并发、换 agent 不丢上下文的关键。
+- README 图解改回 SVG（矢量清晰，PNG 太模糊）。
+- README 日常工作流对齐所有功能：init 自动 spec 化项目现状、自动检测技术栈（Node/Python/Go/Rust + monorepo + .env）、doctor 七类腐化检查。
+
 ## [0.4.0] - 2026-09-14
 
 ### Added

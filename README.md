@@ -1,6 +1,6 @@
 # devctx
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](scripts/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](scripts/)
@@ -8,7 +8,7 @@
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型 / 时间 / 人之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token、不重复踩旧坑。
 > 内置 **Spec Kit（SDD）**：init 时自动把项目现状 spec 化，说"用 spec 做 XXX"自动跑完整规格驱动开发流程。
 >
-> 最新版本 **v0.4.0** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新版本 **v0.4.1** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
 ![跨 IDE 统一上下文机制图解](docs/context-architecture.svg)
 
