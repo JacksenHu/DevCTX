@@ -43,7 +43,7 @@
 - 粗略换算：中文约 1 字 ≈ 1.5–2 token，英文约 1 词 ≈ 1.3 token；拿不准就数行数，
   文档类每行约 10–20 token。
 
-## 4. 六个标准动作 SOP
+## 4. 七个标准动作 SOP
 
 ### init — 首次把项目接入协议（AI 全自动，用户零命令）
 1. 由 AI 运行 `scripts/init_project.py <项目目录>`（默认 detected；明确要全工具覆盖加 `--all`）。
@@ -94,6 +94,29 @@
    用户分几次说、中途插话、输出后追加、发现理解错了，统统是修改现有文档。
 5. **裁定留痕**：结论写进本轮 handoff 记录的 `### Intent` 小节（例 `EXTEND → docs/auth-sms-login.md`），
    下一个 Agent 读得到，不会重新立项。光有 Intent 没有 Done/Next/Verify/Risks 的记录不合规，doctor 会抓。
+
+### retrofit — 存量多 Agent 项目接入（会话回填 + 文档归并）
+
+绿地 init 假设"没有历史"。**被多个 Agent / 多会话开发过的存量项目**不成立：代码是几个会话攒的、
+文档散落各处、半成品看不见。直接 init 只得空壳，新 Agent 仍不知谁在什么约束下写了什么。接入顺序：
+
+1. **证据清点**：`retrofit.py <根> scan`。按"作者 × 时间窗"（同一人两次提交间隔超 14 天即分窗）
+   把 git 历史切成**历史会话画像**（`legacy-bob`、`legacy-alice-2`…），并列存量 .md 清单与
+   TODO/FIXME 半成品信号。没有 git 历史时让用户口述，每段口述对应一个画像。
+2. **init + spec 化**：按 §init 完成 `.ai-dev/` 与 L2；半成品信号按主题写进 specs/。
+3. **会话回填（"压缩各会话 Id"）**：每个画像跑 `retrofit.py baseline --session <建议Id> --topic <主题>
+   --user-file <当时原话> --done/--next/--verify/--risks`。agent 固定 `retrofit`，记录照样过
+   压缩规范四段校验；`INDEX.md` 从此列出每个历史会话的**开放 Next**。原话记不得就写
+   "历史口述：…"，**禁止编造**。
+4. **文档归并**：`retrofit.py consolidate` 给出"并入哪份需求文档 / 独立成篇"建议——
+   **匹配看正文**（标题「API 约定」的主题在正文里）。AI 按建议合并进 `.ai-dev/docs/`
+   （不复制两份，原处留路径引用），再 `--apply` 登记（source 记 `RETROFIT`）。
+   `--add` 会自动补缺失的字段行/字段表，AI 手工放的文档不会被静默半登记。
+5. **指针 + 体检**：sync_rules（已有手写规则用 `--inject`）；`doctor --fix` 清零——
+   未登记文档是错误级，半登记（缺主题/来源）此时必须为零。
+
+顺序不要颠倒：先 init + 会话回填，再文档归并，最后体检。反过来的话，归并中的文档
+会被 intake 当成"未登记的新文档"反复误判。
 
 ### handoff — 收工 / 切换前（省 token 的关键动作）
 按 HANDOFF 模板更新，判断每条信息去留的标准：
@@ -215,3 +238,8 @@ speckit（[github/spec-kit](https://github.com/github/spec-kit)，GitHub 官方 
 - **不跑 intake 就凭用户措辞猜"这是新功能还是改旧功能"**——先拿四类证据裁定，
   结论写进 `Intent`；判错的代价是特性漂移，做出来的不是用户要的。
 - **绕过 `DOCS.md` 直接把文档落盘**——未登记文档是错误级腐化，`--check` 可直接进 CI 拦截。
+- **存量项目接入时跳过会话回填**——git 历史里的多个 Agent/会话必须用 `retrofit.py baseline`
+  逐个回填成记录，否则新 Agent 不知道这些代码是谁在什么约束下写的；原话记不得就写"历史口述"，
+  禁止编造。
+- **存量文档原样复制进 `.ai-dev/docs/`**——那是"一份内容存两处"；按归并建议提炼合并，
+  在原处留路径引用。

@@ -341,6 +341,30 @@ def cmd_find(root: Path, keyword: str) -> int:
     return 0
 
 
+_FIELD_LABELS = {
+    "topic": "主题", "status": "状态", "source": "来源需求", "updated": "最近更新",
+}
+
+
+def _set_field(text: str, key: str, value: str) -> str:
+    """写入一个字段：行在则替换，行缺则插进第一张字段表，表缺则文末补一张。
+
+    AI 手工放的文档常常没有字段表——只替换不补行的话，登记会静默变成
+    半登记（主题靠 H1 兜底、状态与来源空缺），doctor 随后报"缺来源需求"。
+    """
+    label = _FIELD_LABELS[key]
+    rx = _FIELD_RES[key]
+    if rx.search(text):
+        return rx.sub(lambda _m: f"| {label} | {value} |", text, count=1)
+    lines = text.splitlines()
+    for i, ln in enumerate(lines):
+        if re.match(r"^\|\s*-{2,}", ln):          # 第一张字段表的分隔行
+            lines.insert(i + 1, f"| {label} | {value} |")
+            return "\n".join(lines) + "\n"
+    return (text.rstrip()
+            + f"\n\n| 字段 | 值 |\n|---|---|\n| {label} | {value} |\n")
+
+
 def cmd_add(root: Path, rel: str, topic: str, source: str, status: str) -> int:
     docs_dir = root / AI_DEV_DIR / DOCS_DIR
     p = root / rel
@@ -348,11 +372,10 @@ def cmd_add(root: Path, rel: str, topic: str, source: str, status: str) -> int:
         print(f"[!] {rel} 不存在，先照 docs/0000-template.md 创建。", file=sys.stderr)
         return 1
     text = read_text(p)
-    text = re.sub(r"^\|\s*主题\s*\|.*$", f"| 主题 | {topic} |", text, count=1, flags=re.M)
-    text = re.sub(r"^\|\s*状态\s*\|.*$", f"| 状态 | {status} |", text, count=1, flags=re.M)
-    text = re.sub(r"^\|\s*来源需求\s*\|.*$", f"| 来源需求 | {source} |", text, count=1, flags=re.M)
-    text = re.sub(r"^\|\s*最近更新\s*\|.*$",
-                  f"| 最近更新 | {_dt.date.today().isoformat()} |", text, count=1, flags=re.M)
+    text = _set_field(text, "topic", topic)
+    text = _set_field(text, "status", status)
+    text = _set_field(text, "source", source)
+    text = _set_field(text, "updated", _dt.date.today().isoformat())
     write_text(p, text)
     n, idx = rebuild_index(docs_dir)
     print(f"[+] 已登记 {rel}（主题「{topic}」· {status}）")

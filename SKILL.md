@@ -50,6 +50,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 | 用户情形 | 动作 | 触发方式 |
 |---|---|---|
 | 项目没有 `.ai-dev/`，或用户要"多 IDE 统一/接入规范/无缝切换" | **init 全链** | 用户意图 |
+| **存量项目**：已被多个 Agent / 多会话开发过（有 git 历史、散落文档、半成品） | **retrofit 接入**（§1.5：会话回填 + 文档归并） | 用户意图 |
 | **接到任何需求 / 要写任何文档之前** | **intake 需求受理**（见「第零原则」） | **AI 自动，最先做** |
 | 新会话、换 IDE/模型、"接着上次做" | **resume** | AI 自动 |
 | **每轮对话结束（你输出回复之后）** | **handoff**：往 `handoffs/` 追加一条压缩记录 + 滚动更新 HANDOFF.md | AI 自动 |
@@ -71,6 +72,36 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
    - architecture 要写出模块分区与"改什么去哪改"速查；HANDOFF 写入初始状态，元信息"进行中的 spec"列出所有未闭环的 spec；
    - 补项目特有忽略到 `.ai-dev/ignore.conf`（部署运行时目录、构建产物、凭据目录），重建一次索引；
    - 跑一次 `doctor.py --fix` 确认全绿。4. 用一句话向用户交付："已接入，以后直接提需求；换其他 IDE 新开会话即自动接续"，并说明哪些项待他决策（如 git、过期凭据），不罗列过程。
+
+### 1.5 存量多 Agent 项目接入（retrofit：会话回填 + 文档归并）
+
+绿地 init 假设"没有历史"。**被多个 Agent / 多会话开发过的存量项目**不成立：代码是几个会话攒的、
+文档散落各处、半成品看不见——直接 init 只会得到一套空壳，新 Agent 照样不知道谁在什么约束下写了什么。
+按 `retrofit.py plan` 输出的顺序接入，核心是两步：
+
+**第一步：历史会话回填（"压缩各会话 Id"）。** 跑 `retrofit.py <根> scan`，脚本按"作者 × 时间窗"
+把 git 历史切成**历史会话画像**（例 `legacy-bob` / `legacy-alice-2`，间隔超 14 天自动分窗）。
+每个画像跑一次 `baseline` 写一条**基线重建记录**（agent 固定 `retrofit`，会话 Id 用建议值）：
+
+```bash
+python scripts/retrofit.py <根> baseline --session legacy-bob --topic auth-sms-login \
+    --user-file u.txt --done "搭了验证码页面，网关联调中" \
+    --next "- [ ] 接完验证码网关" --risks "网关文档过期，账号未批"
+```
+
+记录照样过压缩规范四段校验，`INDEX.md` 从此列出每个历史会话的**开放 Next**——
+新 Agent 读索引即知"legacy-bob 欠着网关没接完"。git 不可用或没历史时，让用户口述
+"用过哪些工具/会话、各自在做什么、做到哪了"，每段口述对应一条 baseline，**记不得就写
+"历史口述：…"，禁止编造**。
+
+**第二步：存量文档归并（一个需求一份文档）。** 跑 `retrofit.py <根> consolidate`：
+脚本对每份 `.ai-dev/` 之外的 .md 给出"并入哪份需求文档 / 独立成篇"建议——
+**匹配看正文**（标题叫「API 约定」的文档，主题在正文里）。AI 按建议把内容合并进
+`.ai-dev/docs/`（不复制两份，原处留路径引用），再 `--apply` 登记（source 记 `RETROFIT`）；
+`--add` 会自动补缺失的字段行/字段表，AI 手工放的文档不会被静默半登记。
+
+**半成品信号**：scan 的 TODO/FIXME 计数就是接入后第一批「开放 Next」，按主题分拣进各需求文档「待办」。
+顺序不要颠倒：先 init + 会话回填，再文档归并，最后 `doctor --fix` 清零（未登记文档是错误级）。
 
 ### 无 Python 降级路径（环境无 python/python3 时）
 
@@ -190,6 +221,8 @@ EXTEND → docs/auth-sms-login.md（用户中途插话：验证码改用固定�
 
 ```text
 scripts/init_project.py <根> [--all] [--force]   # 初始化 + 首份索引 + 指针 + handoffs/ + docs/
+scripts/retrofit.py <根> scan | plan | baseline | consolidate [--apply]
+                # 存量项目接入：历史会话画像 / 接入顺序 / 基线回填记录 / 文档归并登记
 scripts/doc_registry.py <根>                     # 需求受理 + 文档登记（动手前必跑）
     --intake --user-file U | --user "..."        # 受理裁定：改现有文档还是新建（含证据）
     --find <关键词>                              # 找现有文档
@@ -209,7 +242,11 @@ scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模�
 
 - **doc_registry**：`--intake` 扫四类证据（handoffs 开放 Next、specs 未闭环、docs 索引、code-index）给出
   NEW/EXTEND/CONTINUE/FIX/CORRECTION 判定；裁定优先级固定为 active 文档 > 未闭环记录 > specs，
-  **不得跳过**。`DOCS.md` 原子重建；未登记文档以错误级报出。
+  **不得跳过**。`DOCS.md` 原子重建；未登记文档以错误级报出。`--add` 会自动补缺失的字段行/字段表。
+- **retrofit**：`scan` 把 git 历史按"作者 × 时间窗（>14 天分窗）"切成历史会话画像，并列存量文档与
+  半成品信号；`plan` 输出该项目的接入顺序；`baseline` 为每个历史会话写一条合规记录
+  （agent=retrofit，会话 Id 用画像建议值）；`consolidate` 给存量文档归并建议（**匹配看正文**），
+  `--apply` 把 docs/ 里未登记文档补字段登记（source=RETROFIT）。历史口述同样回填，记不得不编造。
 - **log_handoff**：一条记录一个文件，只增不改；`INDEX.md` 用临时文件 + 原子替换重建，并有文件锁，
   多 Agent 并发写安全。同秒同 Agent 同会话的第二次写入自动加序号防碰撞。
   `--intent` 在涉及"改/建文档"时**必填**（记录裁定结论，防后续 Agent 重新建文档）。
@@ -280,6 +317,8 @@ handoff 时自动读 `specs/<进行中名>/tasks.md`，数勾选数量（已完�
 - `handoffs/` 已初始化，本轮对话已追加一条符合压缩规范的记录（时间戳 + Agent-会话Id + 完整用户原话 + 至少一段 Done/Next/Verify/Risks），
   `INDEX.md` 与磁盘记录数一致，`HANDOFF.md` 已滚动进最新结论。
 - **动手前跑过 `--intake` 并按其判定行动**；涉及改/建文档时，本轮记录写了 `### Intent` 指明落到哪份文档。
+- 存量项目接入时：每个历史会话画像都已回填一条 `baseline` 记录（agent=retrofit，会话 Id 稳定），
+  `INDEX.md` 能看到它们的开放 Next；存量文档已按"一个需求一份文档"归并登记，无未登记文档。
 - `docs/` 里本需求的文档已登记进 `DOCS.md`（主题 / 状态 / 来源需求），
   **没有按对话轮次新建的第二份文档**；用户插话与追加都已并进同一份文档。
 - code-index 与当前文件结构一致、无运行时噪音；在用工具指针同步、手写规则未被破坏。

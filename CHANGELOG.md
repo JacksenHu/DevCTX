@@ -5,6 +5,17 @@
 ## [Unreleased]
 
 ### Added
+- **存量多 Agent 项目接入（`scripts/retrofit.py`）**：治"项目已被多个 Agent/会话开发过"的接入难题
+  - `scan`：按"作者 × 时间窗"（间隔超 14 天自动分窗）把 git 历史切成**历史会话画像**
+    （`legacy-bob` / `legacy-alice-2`…），并列存量 .md 清单与 TODO/FIXME 半成品信号；
+    无 git 历史时提示口述兜底
+  - `plan`：把证据填进接入 SOP，输出该项目的具体顺序（init → spec 化 → 会话回填 →
+    文档归并 → 指针 → 体检），并提醒半成品信号是第一批「开放 Next」
+  - `baseline --session S --topic T`：为每个历史会话写一条**基线重建记录**
+    （agent 固定 `retrofit`）——"压缩各会话 Id"：INDEX 从此列出每个历史会话的开放 Next；
+    原话记不得必须写"历史口述"，禁止编造
+  - `consolidate [--apply]`：存量文档归并建议（**匹配看正文**，标题常常不含主题词）；
+    AI 合并后 `--apply` 把 docs/ 里未登记文档补字段登记（source=RETROFIT）
 - **文档治理与需求受理（`.ai-dev/docs/` + `scripts/doc_registry.py`）**：治“文档泛滥与特性漂移”
   - **一个需求只对应一份文档**：需求文档只放 `.ai-dev/docs/`，`DOCS.md` 是唯一登记索引；
     新建前必须先查索引，能并进现有文档的禁止新建；按主题命名，严禁按对话轮次命名（反模式）
@@ -44,8 +55,12 @@
 ### Fixed
 - **`doctor.py` 语法错误**（`scripts/doctor.py:69` 多余右括号）导致整个脚本无法运行——
   而 init 收尾、`--fix` 自愈、CI `--check` 全都依赖它
+- `doc_registry.cmd_add` 的字段写入只替换已存在的行：AI 手工放的文档没有字段表时，
+  登记静默变成半登记（状态/来源空缺，doctor 随后报"缺来源需求"）；改为行缺插行、表缺补表
 - `doc_registry.rebuild_index` 内部二次 `scan_docs()` 丢弃调用方预设的 `links`，
   导致 `DOCS.md`「关联记录数」永远显示 0；改为在 `rebuild_index` 内统一计算
+- `retrofit` 首条提交即 `windows[-1]` 越界；`consolidate` 的"未登记"误用磁盘扫描对比磁盘、
+  永远为空，改为对比 `DOCS.md` 索引（与 doctor 的检查一致）；归并匹配补上正文
 - `parse_entry` 的 `_SECTION_RE` 不含 `Intent`，受理结论写进记录后读不回来，闭环断裂；
   补入正则，同时把“无压缩节”判定收紧为 Done/Next/Verify/Risks 四节至少一节
 - `match_ignore` 未实现 `ignore.conf` 文档承诺的 `**` 任意层级通配与 `/` 根锚定，
@@ -54,7 +69,7 @@
 
 ### Changed
 - `SKILL.md` / `README.md` / `references/context-protocol.md` 全面写入压缩规范、多 Agent 协作协议、
-  文档治理与需求受理；handoff 触发条件从"任务闭环/收工"改为**每轮对话结束**，
+  文档治理与需求受理、存量项目接入（retrofit）；handoff 触发条件从"任务闭环/收工"改为**每轮对话结束**，
   intake 成为**动手前的第零原则**
 - `START_HERE.md` schema 升级到 `v2`：文件地图登记 `handoffs/` 与 `docs/`，新增 §1.5 需求受理、
   §3 收工协议（压缩规范）、§4 多 Agent 协作约定（含"一个需求一份文档"）；

@@ -27,7 +27,7 @@
 | 文档泛滥 | 每个需求新建一份文档，越堆越乱，Agent 分不清哪份算数 | 一个需求一份文档 + `DOCS.md` 登记索引，未登记即错误 |
 | 特性漂移 | 用户插话/追加被当成新需求重做，做出来不是用户要的 | 动手前 intake 四类证据裁定改还是建，结论写进 `Intent` 留痕 |
 
-## 它不只是"跨 IDE"——6 个真实使用场景
+## 它不只是"跨 IDE"——7 个真实使用场景
 
 很多人第一次看到这个项目以为只解决"Cursor 换 Claude Code"，其实它解决的是更底层的问题：**让 AI 对项目的认知持久化、可携带、不随对话窗口消失**。
 
@@ -39,6 +39,7 @@
 | **④ 跨人交接** | 同事 A 用 Cursor，同事 B 用 Claude Code，你来接手 | `.ai-dev/` 提交进 git，clone 下来就是完整的项目记忆，不用开会口述 |
 | **⑤ 接手遗产代码** | 到新公司/新项目，面对没人讲得清的老代码 | init 自动建 code-index + architecture + glossary + 自动 spec 化项目现状，AI 半小时建立完整心智模型 |
 | **⑥ 团队 AI 规范统一** | 团队成员各用各的工具，规则各写各的 | 规则只在 `.ai-dev/` 维护一份，所有工具共享；`doctor --check` 进 CI 防漂移 |
+| **⑦ 接手多 Agent 遗留项目** | 项目已被好几个 AI 会话开发过，代码是攒的、文档散落、半成品看不见 | `retrofit.py` 把 git 历史切成历史会话画像回填成记录，存量文档按"一个需求一份文档"归并登记 |
 
 > 哪怕你只用一个 IDE、一个模型，这个项目也有用——**单人长期项目的"冬眠后苏醒"** 和 **`lessons.md` 沉淀"这个项目永远不能这么干"** 本身就值回票价。
 
@@ -116,6 +117,29 @@ intake → EXTEND → docs/auth-sms-login.md           ← 改同一份，禁止
 
 `doctor` 把未登记文档（绕过 `DOCS.md` 直接落盘）列为**错误级**问题，`--check` 可直接进 CI。
 
+## 存量多 Agent 项目接入：会话回填 + 文档归并
+
+前面讲的都是"从零接入"。真实里更多是另一种：**项目已经被好几个 Agent/会话开发过**——
+代码是攒的、文档散落各处、半成品看不见。直接 init 只会得到一套空壳，新 Agent 照样不知道
+谁在什么约束下写了什么。`retrofit.py` 把历史变成协议认的证据：
+
+| 命令 | 做什么 |
+|---|---|
+| `scan` | 按"作者 × 时间窗"把 git 历史切成**历史会话画像**（间隔超 14 天自动分窗，例 `legacy-bob`），并列存量文档清单与 TODO/FIXME 半成品信号 |
+| `plan` | 把证据填进接入 SOP，输出这个项目的具体顺序（init → spec 化 → 会话回填 → 文档归并 → 指针 → 体检） |
+| `baseline --session S --topic T` | 为每个历史会话写一条**基线重建记录**（agent 固定 `retrofit`）——这就是"压缩各会话 Id"：INDEX 从此列出 `legacy-bob 欠着验证码网关没接完` |
+| `consolidate [--apply]` | 对每份存量 .md 给"并入哪份需求文档 / 独立成篇"建议（**匹配看正文**）；AI 合并后 `--apply` 登记 |
+
+```text
+git 历史：Alice 三月/九月各一批、Bob 六月一批
+   → scan：legacy-alice-1 / legacy-alice-2 / legacy-bob 三个画像
+   → baseline ×3：三条合规记录进 handoffs/，开放 Next 进 INDEX
+   → consolidate：docs/api.md → 并入 docs/auth-sms-login.md（相关度 21.5）
+```
+
+两条纪律：**历史口述同样回填，记不得就写"历史口述：…"，禁止编造**；
+**存量文档合并不复制两份**，原处留路径引用。半成品信号（TODO/FIXME）就是接入后第一批「开放 Next」。
+
 ## 安装（3 步，零配置）
 
 你只需要"拿到**整个文件夹**、放进 AI 助手的技能目录"，不需要配置任何脚本，也不需要单独安装 Python 包。
@@ -163,6 +187,7 @@ intake → EXTEND → docs/auth-sms-login.md           ← 改同一份，禁止
 - **resume（新会话自动）**：读 START_HERE + HANDOFF + `handoffs/INDEX.md`，沿"下一步"继续；动手前先查 lessons.md。
 - **intake（动手前自动，第零原则）**：用户提出需求后，先跑 `doc_registry.py --intake` 拿四类证据裁定改现有文档还是新建；文档一律进 `.ai-dev/docs/` 并登记进 `DOCS.md`，一个需求只对应一份文档。
 - **handoff（每轮对话结束自动）**：往 `handoffs/` 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks + Intent 受理结论），并把最新结论滚动进 HANDOFF.md；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。
+- **retrofit（存量多 Agent 项目接入）**：`scan` 把 git 历史切成历史会话画像、清点存量文档与半成品信号；`baseline` 为每个历史会话回填一条合规记录（"压缩各会话 Id"）；`consolidate` 给存量文档归并建议并登记；最后 doctor 清零。
 - **archive（记录超量自动）**：HANDOFF 超 120 行搬历史区，`handoffs/` 超 200 条搬最旧的进 `archive/handoffs/`，活跃窗口不动。
 - **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）、**未登记文档 / 文档缺主题或来源 / 主题重复**等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
 
@@ -178,6 +203,7 @@ devctx/
 ├── scripts/                     # AI 调用的工具，用户无需运行
 │   ├── init_project.py          # 初始化 .ai-dev（含 handoffs/ + docs/）+ 技术栈检测 + 首份索引 + 工具指针
 │   ├── log_handoff.py           # 每轮对话压缩记录：追加记录 + 重建 INDEX + 读最近记录（多 Agent 并发安全）
+│   ├── retrofit.py              # 存量项目接入：历史会话画像 + 基线回填 + 存量文档归并登记
 │   ├── doc_registry.py          # 文档登记索引 DOCS.md + 需求受理 intake（防文档泛滥与特性漂移）
 │   ├── build_index.py           # 生成代码地图（尊重 .gitignore 与 ignore.conf）
 │   ├── sync_rules.py            # 生成/校验/注入各工具薄指针（幂等）
@@ -209,6 +235,10 @@ python scripts/init_project.py <项目根> [--all] [--force]
 python scripts/log_handoff.py <项目根> --user-file user.txt --body-file body.md \
     [--agent claude-code --session a1b2c3d4] [--model sonnet] [--intent "EXTEND → docs/auth.md"]
 python scripts/log_handoff.py <项目根> --list | --tail 3 [--agent cursor] | --template | --rebuild-index
+python scripts/retrofit.py <项目根> scan | plan                    # 存量项目：证据清点 / 接入顺序
+python scripts/retrofit.py <项目根> baseline --session legacy-bob --topic auth-sms-login \
+    --user-file u.txt --done "..." --next "- [ ] ..." --risks "..."   # 历史会话基线回填
+python scripts/retrofit.py <项目根> consolidate [--apply]          # 存量文档归并建议 / 登记
 python scripts/doc_registry.py <项目根> --intake --user-file user.txt     # 需求受理：改现有文档还是新建
 python scripts/doc_registry.py <项目根> --find 登录 | --list | --rebuild | --check | --init
 python scripts/doc_registry.py <项目根> --add docs/auth-sms-login.md --topic "短信验证码登录" \

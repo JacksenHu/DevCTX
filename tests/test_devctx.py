@@ -475,6 +475,23 @@ class TestDocRegistry(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertIn("主题重复", r.stdout)
 
+    def test_add_fills_missing_field_table(self) -> None:
+        # AI 手工放的文档没有字段表：--add 必须补行/补表，不能静默半登记
+        bare = self.tmp / ".ai-dev" / "docs" / "bare.md"
+        bare.write_text("<!-- devctx-docs: doc -->\n# 光秃秃的文档\n只有一句话。\n",
+                        encoding="utf-8")
+        doc_registry.cmd_add(self.tmp, ".ai-dev/docs/bare.md", "光秃主题",
+                             "RETROFIT 2026-10-12", "active")
+        d = doc_registry.parse_doc(bare)
+        self.assertEqual(d.topic, "光秃主题")
+        self.assertEqual(d.status, "active")
+        self.assertIn("RETROFIT", d.source)
+        self.assertEqual(d.malformed, [])
+        idx = (self.tmp / ".ai-dev" / "docs" / "DOCS.md").read_text(encoding="utf-8")
+        row = [ln for ln in idx.splitlines() if "bare.md" in ln][0]
+        self.assertIn("光秃主题", row)
+        self.assertNotIn("（缺）", row)
+
     def test_find_hits_and_misses(self) -> None:
         _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
         r = self.run_script("doc_registry.py", "--find", "验证码")
@@ -682,6 +699,143 @@ class TestIntentSection(unittest.TestCase):
         links = doc_registry.count_links(self.tmp, "auth-sms-login.md")
         self.assertEqual(links, 1)
 
+
+
+# ==================================================== 存量多 Agent 项目接入（retrofit）
+#
+# 这一组守"接手遗留项目"的契约：git 历史要能切成历史会话画像并回填成
+# 合规记录；存量文档的归并建议要看正文（标题常常不包含主题）；--apply
+# 的"未登记"必须对比 DOCS.md 索引而不是磁盘扫描。
+
+def _commit(root: Path, msg: str, name: str, email: str, date: str,
+            touch: str) -> None:
+    f = root / touch
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with open(f, "a", encoding="utf-8") as fh:
+        fh.write(f"# {msg}\n")
+    env = {
+        "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date,
+        "GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
+        "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email,
+        "PATH": os.environ.get("PATH", ""),
+    }
+    subprocess.run(["git", "-C", str(root), "add", "-A"],
+                   capture_output=True, check=True)
+    subprocess.run(["git", "-C", str(root), "commit", "-qm", msg],
+                   capture_output=True, env=env, check=True)
+
+
+class TestRetrofit(unittest.TestCase):
+    """A legacy project built by several agents/sessions gets onboarded."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="devctx-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        subprocess.run(["git", "init", "-q", str(self.tmp)],
+                       capture_output=True, check=True)
+        (self.tmp / "src").mkdir()
+        (self.tmp / "src" / "app.py").write_text(
+            '"""app"""\n# TODO: 抽离配置\n', encoding="utf-8")
+        (self.tmp / "src" / "auth.py").write_text(
+            '"""sms login"""\n# FIXME: 网关未接\n', encoding="utf-8")
+        (self.tmp / "docs").mkdir()
+        (self.tmp / "docs" / "api.md").write_text(
+            "# API 约定\n短信验证码登录接口：POST /auth/sms\n", encoding="utf-8")
+        (self.tmp / "README.md").write_text("# 遗留项目说明\n", encoding="utf-8")
+        _commit(self.tmp, "初始化项目骨架", "Alice", "alice@x.com",
+                "2026-03-01T10:00:00", "src/app.py")
+        _commit(self.tmp, "短信验证码登录 搭页面", "Bob", "bob@x.com",
+                "2026-06-10T14:00:00", "src/auth.py")
+        _commit(self.tmp, "验证码登录 网关联调", "Bob", "bob@x.com",
+                "2026-06-12T09:30:00", "src/auth.py")
+        _commit(self.tmp, "导出报表 需求新增", "Alice", "alice@x.com",
+                "2026-09-20T16:00:00", "src/app.py")
+        rc = init_project.init(self.tmp, "detected", False)
+        self.assertEqual(rc, 0)
+
+    def run_script(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / "retrofit.py"), str(self.tmp), *args],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+
+    def test_scan_mines_sessions_docs_and_stubs(self) -> None:
+        r = self.run_script("scan")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # Alice 三月一次、九月一次 → 两个画像；Bob 六月两次相邻 → 一个
+        self.assertIn("历史会话画像（3 个）", r.stdout)
+        self.assertIn("legacy-alice-1", r.stdout)
+        self.assertIn("legacy-alice-2", r.stdout)
+        self.assertIn("legacy-bob", r.stdout)
+        self.assertIn("docs/api.md", r.stdout)
+        self.assertIn("半成品信号", r.stdout)
+        self.assertIn("2 处", r.stdout)          # TODO + FIXME
+
+    def test_scan_without_git_is_graceful(self) -> None:
+        shutil.rmtree(self.tmp / ".git")
+        r = self.run_script("scan")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("不是 git 仓库", r.stdout)
+        self.assertIn("docs/api.md", r.stdout)    # 文档清单仍然可用
+
+    def test_plan_lists_ordered_steps(self) -> None:
+        r = self.run_script("plan")
+        self.assertEqual(r.returncode, 0)
+        for i in range(1, 8):
+            self.assertIn(f"{i}. ", r.stdout)
+        self.assertIn("baseline", r.stdout)
+        self.assertIn("consolidate", r.stdout)
+
+    def test_baseline_record_is_valid_and_indexed(self) -> None:
+        r = self.run_script("baseline", "--session", "legacy-bob",
+                            "--topic", "auth-sms-login",
+                            "--user", "把短信验证码登录的网关卡打完",
+                            "--done", "搭了验证码页面，网关联调中",
+                            "--next", "- [ ] 接完验证码网关",
+                            "--risks", "网关文档过期")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        entries = log_handoff.scan_entries(self.tmp / ".ai-dev" / "handoffs")
+        self.assertEqual(len(entries), 1)
+        e = entries[0]
+        self.assertEqual(e.agent, "retrofit")
+        self.assertEqual(e.session, "legacy-bob")
+        self.assertEqual(e.malformed, [])
+        self.assertIn("把短信验证码登录的网关卡打完", e.user_text)
+        self.assertEqual(e.open_next, 1)
+        self.assertIn("RETROFIT → docs/auth-sms-login.md",
+                      e.sections.get("Intent", ""))
+        idx = (self.tmp / ".ai-dev" / "handoffs" / "INDEX.md").read_text(encoding="utf-8")
+        self.assertIn("legacy-bob", idx)
+
+    def test_baseline_requires_user_text(self) -> None:
+        r = self.run_script("baseline", "--session", "legacy-bob",
+                            "--topic", "auth-sms-login", "--done", "做了点")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("--user", r.stdout + r.stderr)
+
+    def test_consolidate_suggests_merge_by_body(self) -> None:
+        # 标题「API 约定」不含主题词，正文才有——建议必须看正文
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        r = self.run_script("consolidate")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("docs/api.md", r.stdout)
+        self.assertIn("docs/auth-sms-login.md", r.stdout)
+        self.assertIn("建议并入", r.stdout)
+
+    def test_consolidate_apply_registers_unregistered(self) -> None:
+        rogue = self.tmp / ".ai-dev" / "docs" / "legacy-note.md"
+        rogue.write_text("# 遗留笔记\n", encoding="utf-8")
+        r = self.run_script("consolidate")
+        self.assertIn("legacy-note.md", r.stdout)
+        self.assertIn("dry-run", r.stdout)
+        r = self.run_script("consolidate", "--apply")
+        self.assertEqual(r.returncode, 0)
+        idx = (self.tmp / ".ai-dev" / "docs" / "DOCS.md").read_text(encoding="utf-8")
+        self.assertIn("legacy-note.md", idx)
+        self.assertIn("RETROFIT", idx)
+        # 登记后 doctor 的 docs 检查不再报未登记
+        r = self.run_script("consolidate")
+        self.assertIn("全部已登记", r.stdout)
 
 
 if __name__ == "__main__":
