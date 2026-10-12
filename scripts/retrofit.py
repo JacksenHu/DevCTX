@@ -290,7 +290,9 @@ def cmd_plan(root: Path) -> int:
                        "TODO/FIXME 与半成品按主题写进 specs/（已完成的标'已完成'，未完成的跑 spec→plan→tasks）。"),
         ("会话回填", f"为 {len(profiles)} 个历史会话画像逐个跑 "
                    "retrofit.py baseline --session <建议Id> --topic <主题> --user-file <原话> "
-                   "--done/--next/--risks …（agent 固定 retrofit）。用户口述的历史同样回填。"
+                   "--done/--next/--risks …（agent 固定 retrofit）。"
+                   "用户手上有真实会话记录/Id 的可精确回填；没有就按画像名重建或让其口述，"
+                   "记不得标'历史口述'，禁止编造。"
                    "没有这一步，新 Agent 不知道这些代码是谁在什么约束下写的。"),
         ("文档归并", f"对 {len(docs)} 份存量文档跑 retrofit.py consolidate 看建议，"
                    "按'一个需求一份文档'合并进 .ai-dev/docs/，再 --apply 登记；"
@@ -301,6 +303,9 @@ def cmd_plan(root: Path) -> int:
     ]
     for i, (name, detail) in enumerate(steps, 1):
         print(f"{i}. {name}：{detail}")
+    print("\n主动项（问一句，不索要作业）：若用户有各工具的历史会话记录或真实会话 Id")
+    print("（Claude Code ~/.claude/projects/、Cursor 工作区存储等），要过来可把对应画像")
+    print("升级为精确回填；没有也不阻塞——git 画像名本身就是稳定标签，口述同样有效。")
     if stubs:
         print(f"\n提醒：扫描到 {sum(stubs.values())} 处半成品信号（前 8 个目录见 scan），"
               "它们是接入后第一批「开放 Next」的来源。")

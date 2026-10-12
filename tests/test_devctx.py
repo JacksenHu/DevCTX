@@ -786,6 +786,13 @@ class TestRetrofit(unittest.TestCase):
         self.assertIn("baseline", r.stdout)
         self.assertIn("consolidate", r.stdout)
 
+    def test_plan_offers_real_session_ids(self) -> None:
+        """plan 输出必须主动给'真实会话 Id 可精确回填'的选项，且保留禁止编造红线。"""
+        r = self.run_script("plan")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("历史会话记录", r.stdout)
+        self.assertIn("禁止编造", r.stdout)
+
     def test_baseline_record_is_valid_and_indexed(self) -> None:
         r = self.run_script("baseline", "--session", "legacy-bob",
                             "--topic", "auth-sms-login",
