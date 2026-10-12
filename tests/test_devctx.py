@@ -845,5 +845,88 @@ class TestRetrofit(unittest.TestCase):
         self.assertIn("全部已登记", r.stdout)
 
 
+class TestProbe(unittest.TestCase):
+    """Local session-store probing: discovery only, never message bodies."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="devctx-test-")).resolve()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+        (self.tmp / "src").mkdir()
+        (self.tmp / "src" / "app.py").write_text('"""app"""\n', encoding="utf-8")
+
+    def run_probe(self) -> subprocess.CompletedProcess:
+        env = {**os.environ, "HOME": str(self.home)}
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / "retrofit.py"), str(self.tmp), "probe"],
+            capture_output=True, text=True, encoding="utf-8", env=env,
+        )
+
+    def _claude_session(self, sid: str, day: str, cwd: str | None = None) -> None:
+        enc = str(cwd or self.tmp).replace("/", "-")
+        d = self.home / ".claude" / "projects" / enc
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{sid}.jsonl").write_text(
+            '{"sessionId":"%s","cwd":"%s","timestamp":"2026-10-%sT10:00:00.000Z"}\n'
+            '{"role":"user","content":"这是消息正文，不许被探测读走"}\n'
+            % (sid, cwd or self.tmp, day),
+            encoding="utf-8")
+
+    def test_probe_finds_claude_sessions_scoped(self) -> None:
+        self._claude_session("a1b2c3d4", "11")
+        self._claude_session("e5f6a7b8", "12")
+        # 诱饵：另一个项目的历史，不能算作本项目的
+        self._claude_session("zzzz9999", "12", cwd="/somewhere/else")
+        r = self.run_probe()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("claude-code", r.stdout)
+        self.assertIn("a1b2c3d4", r.stdout)
+        self.assertIn("e5f6a7b8", r.stdout)
+        self.assertIn("2 个会话", r.stdout)
+        self.assertNotIn("zzzz9999", r.stdout)
+        self.assertIn("不读消息正文", r.stdout)
+        self.assertNotIn("消息正文，不许", r.stdout)   # 隐私红线：正文绝不出现
+
+    def test_probe_cwd_fallback_when_encoding_differs(self) -> None:
+        # 目录名编码猜不中的情况下，靠首行 cwd 精确匹配仍然能归属
+        self._claude_session("cafe1234", "12", cwd="/somewhere/else")
+        d = self.home / ".claude" / "projects" / "weird-encoding-xyz"
+        d.mkdir(parents=True)
+        (d / "cafe1234.jsonl").write_text(
+            '{"sessionId":"cafe1234","cwd":"%s","timestamp":"2026-10-12T10:00:00.000Z"}\n'
+            % str(self.tmp), encoding="utf-8")
+        r = self.run_probe()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("cafe1234", r.stdout)
+        self.assertIn("1 个会话", r.stdout)
+
+    def test_probe_counts_aider_turns_in_project(self) -> None:
+        (self.tmp / ".aider.chat.history.md").write_text(
+            "# aider chat started\n#### 把登录改成手机号\nsome reply\n"
+            "#### 再加个验证码\nmore reply\n", encoding="utf-8")
+        r = self.run_probe()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("aider", r.stdout)
+        self.assertIn("2 轮", r.stdout)
+
+    def test_probe_empty_home_is_graceful(self) -> None:
+        r = self.run_probe()
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("未发现", r.stdout)
+
+    def test_plan_surfaces_probe_findings(self) -> None:
+        self._claude_session("a1b2c3d4", "11")
+        env = {**os.environ, "HOME": str(self.home)}
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "retrofit.py"), str(self.tmp), "plan"],
+            capture_output=True, text=True, encoding="utf-8", env=env,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("本机探测到以下工具的会话存储", r.stdout)
+        self.assertIn("a1b2c3d4", r.stdout)
+        self.assertIn("git 画像名本身就是稳定标签", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

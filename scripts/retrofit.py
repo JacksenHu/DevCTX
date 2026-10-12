@@ -17,6 +17,8 @@ This script turns that history into protocol-shaped evidence:
 
     scan        # 证据清点：历史会话画像（git 挖掘）+ 存量文档清单 + 半成品信号
     plan        # 把证据填进接入 SOP，输出该项目的具体接入顺序
+    probe       # 探测本机各工具的本地会话存储（只列元数据，不读消息正文），
+                #   把"用户有真实会话 Id 吗"从一句空话变成有证据的选项
     baseline    # 为每个历史会话写一条"基线重建"记录（agent=retrofit），
                 #   给它一个稳定的 DevCTX 会话 Id——这就是"压缩各会话 Id"
     consolidate # 存量文档归并建议；--apply 把已放进 docs/ 的文档登记进 DOCS.md
@@ -30,6 +32,7 @@ Usage (called by the AI, never by the user)::
 
     python scripts/retrofit.py <根> scan [--max-commits 400]
     python scripts/retrofit.py <根> plan
+    python scripts/retrofit.py <根> probe
     python scripts/retrofit.py <根> baseline --session legacy-cursor-1 \
         --topic auth-sms-login --user-file u.txt \
         --done "..." --next "- [ ] ..." --risks "..."
@@ -40,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import json
 import os
 import re
 import subprocess
@@ -238,6 +242,252 @@ def scan_stubs(root: Path, patterns: list) -> dict:
 
 # --------------------------------------------------------------------- output
 
+# ---------------------------------------------------------------- probe
+@dataclass
+class ProbeHit:
+    """One local session store found on this machine (metadata only)."""
+    tool: str
+    count: int
+    where: str
+    scoped: bool = False                  # True = 已确认属于本项目
+    ids: list[str] = field(default_factory=list)
+    note: str = ""
+
+
+def _probe_home() -> Path:
+    try:
+        return Path.home()
+    except Exception:                     # pragma: no cover - 极端环境
+        return Path(os.path.expanduser("~"))
+
+
+def _first_meta(path: Path) -> dict:
+    """Read ONLY the first JSON line of a session file (id/timestamp/cwd).
+
+    Message bodies are never touched — probing enumerates, the AI reads.
+    """
+    try:
+        with path.open("rb") as fh:
+            raw = fh.readline(8192)
+        return json.loads(raw.decode("utf-8", "replace"))
+    except Exception:
+        return {}
+
+
+def _claude_encoded(root: Path) -> str:
+    """Claude Code 的项目目录编码：路径分隔符一律换成 '-'。"""
+    return re.sub(r"[\\/]", "-", str(root))
+
+
+def probe_claude(root: Path) -> ProbeHit | None:
+    """Claude Code: ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl"""
+    base = _probe_home() / ".claude" / "projects"
+    if not base.is_dir():
+        return None
+    files: list[Path] = []
+    d = base / _claude_encoded(root)
+    if d.is_dir():
+        files = sorted(d.glob("*.jsonl"))
+    if not files:
+        # 目录名编码跨版本变过：退回按首行 cwd 精确匹配（有上限，防拖慢接入）
+        want = str(root)
+        cands: list[Path] = []
+        for pd in sorted(base.iterdir()):
+            if not pd.is_dir():
+                continue
+            cands.extend(pd.glob("*.jsonl"))
+            if len(cands) >= 400:
+                break
+        files = [f for f in cands if str(_first_meta(f).get("cwd", "")) == want]
+    if not files:
+        return None
+    ids = [str(_first_meta(f).get("sessionId") or f.stem) for f in files[:8]]
+    return ProbeHit("claude-code", len(files), str(d if d.is_dir() else base),
+                    True, ids, "jsonl 全文在该目录，AI 读取后以 baseline 精确回填")
+
+
+def probe_aider(root: Path) -> ProbeHit | None:
+    """Aider: 项目根 .aider.chat.history.md（本人范围）；~ 下的是全局兜底。"""
+    for f, scoped in ((root / ".aider.chat.history.md", True),
+                      (_probe_home() / ".aider.chat.history.md", False)):
+        if f.is_file():
+            try:
+                text = f.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                text = ""
+            turns = len(re.findall(r"(?m)^#### ", text))
+            if turns:
+                kb = f.stat().st_size // 1024
+                return ProbeHit("aider", turns, str(f), scoped, [],
+                                f"Markdown 全量对话（{turns} 轮 · {kb}KB），AI 读后按主题回填")
+    return None
+
+
+def probe_codex(root: Path) -> ProbeHit | None:
+    """OpenAI Codex CLI: ~/.codex/sessions/**/rollout-*.jsonl（首行带 cwd，可精确归属）。"""
+    base = _probe_home() / ".codex" / "sessions"
+    if not base.is_dir():
+        return None
+    files = sorted(base.rglob("*.jsonl"))[:200]
+    if not files:
+        return None
+    want = str(root)
+    ids: list[str] = []
+    mine = 0
+    for f in files:
+        payload = _first_meta(f).get("payload") or {}
+        if str(payload.get("cwd", "")) == want:
+            mine += 1
+            if len(ids) < 8:
+                ids.append(str(payload.get("id") or f.stem))
+    if mine:
+        return ProbeHit("codex", mine, str(base), True, ids,
+                        "rollout jsonl 首行带 cwd，已按本项目过滤")
+    return ProbeHit("codex", len(files), str(base), False, [],
+                    "全局会话库，未按项目过滤——需人工确认哪些属于本项目")
+
+
+def probe_gemini(root: Path) -> ProbeHit | None:
+    """Gemini CLI: ~/.gemini/tmp/<项目哈希>/（哈希不可逆，只能报存在与数量）。"""
+    base = _probe_home() / ".gemini" / "tmp"
+    if not base.is_dir():
+        return None
+    dirs = [p for p in base.iterdir() if p.is_dir()]
+    if not dirs:
+        return None
+    return ProbeHit("gemini-cli", len(dirs), str(base), False, [],
+                    "按项目哈希分目录，哈希不可逆——需人工确认哪个目录属于本项目")
+
+
+def probe_continue(root: Path) -> ProbeHit | None:
+    """Continue: ~/.continue/sessions.json 索引（含 workspaceDirectory，可精确归属）。"""
+    idx = _probe_home() / ".continue" / "sessions.json"
+    if idx.is_file():
+        try:
+            data = json.loads(idx.read_text(encoding="utf-8", errors="replace")[:2_000_000])
+        except Exception:
+            data = None
+        if isinstance(data, dict):
+            sessions = data.get("sessions")
+            if isinstance(sessions, list) and sessions:
+                want = str(root)
+                mine = [s for s in sessions if isinstance(s, dict)
+                        and str(s.get("workspaceDirectory", "")) == want]
+                if mine:
+                    return ProbeHit("continue", len(mine), str(idx), True,
+                                    [str(s.get("sessionId", "")) for s in mine[:8]],
+                                    "sessions.json 索引已按 workspaceDirectory 过滤")
+                return ProbeHit("continue", len(sessions), str(idx), False, [],
+                                "索引存在但无匹配工作区——可能换过目录或旧版布局")
+    d = _probe_home() / ".continue" / "sessions"
+    if d.is_dir():
+        files = list(d.glob("*.json"))
+        if files:
+            return ProbeHit("continue", len(files), str(d), False, [],
+                            "逐会话 JSON 目录，未按项目过滤")
+    return None
+
+
+_EDITOR_DIRS = ("Code", "Code - Insiders", "VSCodium", "Cursor", "Windsurf", "Trae")
+
+
+def _editor_user_dir(editor: str, kind: str) -> Path | None:
+    """按平台定位某编辑器的 User/<globalStorage|workspaceStorage> 目录。"""
+    home = _probe_home()
+    cand: Path | None
+    if sys.platform == "darwin":
+        cand = home / "Library" / "Application Support" / editor / "User" / kind
+    elif sys.platform.startswith("win"):
+        appdata = os.environ.get("APPDATA", "")
+        cand = Path(appdata) / editor / "User" / kind if appdata else None
+    else:
+        cand = home / ".config" / editor / "User" / kind
+    return cand if (cand and cand.is_dir()) else None
+
+
+def _probe_vscode_ext(tool: str, ext_id: str) -> ProbeHit | None:
+    """Cline / Roo：编辑器 globalStorage 下的任务目录，一个任务 = 一段会话。"""
+    for editor in _EDITOR_DIRS:
+        gs = _editor_user_dir(editor, "globalStorage")
+        if not gs:
+            continue
+        tasks = gs / ext_id / "tasks"
+        if tasks.is_dir():
+            dirs = [p for p in tasks.iterdir() if p.is_dir()]
+            if dirs:
+                return ProbeHit(tool, len(dirs), str(tasks), False, [],
+                                "一个任务目录 = 一段会话（api_conversation_history.json），"
+                                "未按项目过滤")
+    return None
+
+
+def probe_cline(root: Path) -> ProbeHit | None:
+    return _probe_vscode_ext("cline", "saoudrizwan.claude-dev")
+
+
+def probe_roo(root: Path) -> ProbeHit | None:
+    return _probe_vscode_ext("roo-code", "rooveterinaryinc.roo-cline")
+
+
+def _probe_workspaces(tool: str, editor: str) -> ProbeHit | None:
+    ws = _editor_user_dir(editor, "workspaceStorage")
+    if not ws:
+        return None
+    dirs = [p for p in ws.iterdir() if p.is_dir()]
+    if not dirs:
+        return None
+    return ProbeHit(tool, len(dirs), str(ws), False, [],
+                    "SQLite 工作区存储，会话内容需专用提取；按打开过的项目目录对应")
+
+
+def probe_cursor(root: Path) -> ProbeHit | None:
+    return _probe_workspaces("cursor", "Cursor")
+
+
+def probe_windsurf(root: Path) -> ProbeHit | None:
+    return _probe_workspaces("windsurf", "Windsurf")
+
+
+def probe_trae(root: Path) -> ProbeHit | None:
+    return _probe_workspaces("trae", "Trae")
+
+
+def run_probe(root: Path) -> list[ProbeHit]:
+    """探测所有已知本地会话存储。任何异常都静默跳过，绝不拖垮接入。"""
+    hits: list[ProbeHit] = []
+    for fn in (probe_claude, probe_aider, probe_codex, probe_gemini,
+               probe_continue, probe_cline, probe_roo,
+               probe_cursor, probe_windsurf, probe_trae):
+        try:
+            hit = fn(root)
+        except Exception:
+            hit = None                       # 单个来源失败不影响其它来源
+        if hit and hit.count > 0:
+            hits.append(hit)
+    return hits
+
+
+def print_probe(hits: list[ProbeHit]) -> None:
+    print("本机会话记录探测（只枚举 Id/时间/路径，不读消息正文）：")
+    if not hits:
+        print("  （未发现已知工具的本地会话存储）")
+    for h in hits:
+        mark = "本项目" if h.scoped else "全局存储 · 需确认归属"
+        print(f"  {h.tool:<12} {h.count:>3} 个会话 · {mark} · {h.where}")
+        if h.ids:
+            print(f"    Id：{'、'.join(h.ids[:8])}")
+        if h.note:
+            print(f"    {h.note}")
+    print("  → 对命中来源：AI 读取记录内容后，以 baseline --session <真实Id> 精确回填；")
+    print("    没有也不阻塞——git 画像名本身就是稳定标签。")
+
+
+def cmd_probe(root: Path) -> int:
+    print(f"本机会话记录探测 — {root}\n")
+    print_probe(run_probe(root))
+    return 0
+
+
 def cmd_scan(root: Path, max_commits: int) -> int:
     profiles, note = mine_sessions(root, max_commits)
     docs = find_legacy_docs(root)
@@ -303,9 +553,21 @@ def cmd_plan(root: Path) -> int:
     ]
     for i, (name, detail) in enumerate(steps, 1):
         print(f"{i}. {name}：{detail}")
-    print("\n主动项（问一句，不索要作业）：若用户有各工具的历史会话记录或真实会话 Id")
-    print("（Claude Code ~/.claude/projects/、Cursor 工作区存储等），要过来可把对应画像")
-    print("升级为精确回填；没有也不阻塞——git 画像名本身就是稳定标签，口述同样有效。")
+    print("\n主动项（问一句，不索要作业）：")
+    hits = run_probe(root)
+    if hits:
+        print("  本机探测到以下工具的会话存储，可把对应 git 画像升级为精确回填：")
+        for h in hits:
+            mark = "本项目" if h.scoped else "全局存储 · 需确认归属"
+            print(f"    {h.tool:<12} {h.count:>3} 个会话 · {mark} · {h.where}")
+            if h.ids:
+                print(f"      Id：{'、'.join(h.ids[:8])}")
+        print("  （探测只列元数据；回填时由 AI 读取内容，用户确认后执行）")
+    else:
+        print("  本机未探测到已知工具的会话存储。")
+    print("  若用户另有各工具的历史会话记录或真实会话 Id（Claude Code ~/.claude/projects/、")
+    print("  Cursor 工作区存储等），要过来同样可精确回填；没有也不阻塞——")
+    print("  git 画像名本身就是稳定标签，口述同样有效。")
     if stubs:
         print(f"\n提醒：扫描到 {sum(stubs.values())} 处半成品信号（前 8 个目录见 scan），"
               "它们是接入后第一批「开放 Next」的来源。")
@@ -413,6 +675,7 @@ def main() -> int:
     p_scan = sub.add_parser("scan", help="证据清点：历史会话画像 + 存量文档 + 半成品信号")
     p_scan.add_argument("--max-commits", type=int, default=400)
     sub.add_parser("plan", help="把证据填进接入 SOP，输出具体接入顺序")
+    sub.add_parser("probe", help="探测本机各工具的本地会话存储（只列元数据，不读正文）")
     p_base = sub.add_parser("baseline", help="为一个历史会话写基线重建记录")
     p_base.add_argument("--session", required=True, help="该历史会话的 DevCTX 会话 Id")
     p_base.add_argument("--topic", required=True, help="归并目标需求文档主题（文件名用）")
@@ -431,6 +694,8 @@ def main() -> int:
         return cmd_scan(root, args.max_commits)
     if args.cmd == "plan":
         return cmd_plan(root)
+    if args.cmd == "probe":
+        return cmd_probe(root)
     if args.cmd == "baseline":
         if args.user_file:
             user_text = read_text(Path(args.user_file))

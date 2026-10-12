@@ -94,10 +94,12 @@ python scripts/retrofit.py <根> baseline --session legacy-bob --topic auth-sms-
 
 **主动给选项，不索要作业**：git 画像名（`legacy-*`）本身就是稳定标签，不是"假 Id"，
 按它回填即可交付；但用户手上某个工具的**历史会话记录或真实会话 Id**（Claude Code 的
-`~/.claude/projects/`、Cursor 工作区存储等）能把对应画像升级为**精确回填**。所以在
-`plan` 输出后，用一句话主动给这个选项："有会话记录/Id 给我可以精确回填，没有也不影响"。
-git 不可用或没历史时，让用户口述"用过哪些工具/会话、各自在做什么、做到哪了"，每段口述
-对应一条 baseline，**记不得就写"历史口述：…"，禁止编造**。
+`~/.claude/projects/`、Cursor 工作区存储等）能把对应画像升级为**精确回填**。所以
+`plan` 输出后，**先跑 `retrofit.py <根> probe`**：脚本探测本机已知工具的本地会话存储，
+**只枚举 Id/路径/数量，绝不读消息正文**（能按本项目精确归属的才标"本项目"，
+全局存储标注"需确认归属"）。拿着探测结果再问一句："发现 N 个 Claude Code 会话记录，
+要我用它们精确回填吗？没有也不影响。"git 不可用或没历史时，让用户口述"用过哪些工具/会话、
+各自在做什么、做到哪了"，每段口述对应一条 baseline，**记不得就写"历史口述：…"，禁止编造**。
 
 **第二步：存量文档归并（一个需求一份文档）。** 跑 `retrofit.py <根> consolidate`：
 脚本对每份 `.ai-dev/` 之外的 .md 给出"并入哪份需求文档 / 独立成篇"建议——
@@ -226,7 +228,7 @@ EXTEND → docs/auth-sms-login.md（用户中途插话：验证码改用固定�
 
 ```text
 scripts/init_project.py <根> [--all] [--force]   # 初始化 + 首份索引 + 指针 + handoffs/ + docs/
-scripts/retrofit.py <根> scan | plan | baseline | consolidate [--apply]
+scripts/retrofit.py <根> scan | plan | probe | baseline | consolidate [--apply]
                 # 存量项目接入：历史会话画像 / 接入顺序 / 基线回填记录 / 文档归并登记
 scripts/doc_registry.py <根>                     # 需求受理 + 文档登记（动手前必跑）
     --intake --user-file U | --user "..."        # 受理裁定：改现有文档还是新建（含证据）

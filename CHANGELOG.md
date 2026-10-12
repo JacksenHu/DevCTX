@@ -82,6 +82,13 @@
   （Claude Code `~/.claude/projects/`、Cursor 工作区存储等）可把 git 画像升级为精确回填，
   没有也不阻塞——画像名本身就是稳定标签；`SKILL.md` §1.5 同步写明"不索要作业"，
   口述兜底与"禁止编造"红线不变
+- **`retrofit.py probe`（新增）**：探测本机已知工具的本地会话存储——Claude Code
+  （`~/.claude/projects/`，目录名编码失配时按首行 `cwd` 精确归属）、Aider（项目内
+  `.aider.chat.history.md` 轮数）、Codex（`~/.codex/sessions/` rollout 首行 `cwd`）、
+  Continue（`sessions.json` 按 `workspaceDirectory`）、Cline/Roo（编辑器 globalStorage
+  任务库）、Cursor/Windsurf/Trae（workspaceStorage）、Gemini CLI（`~/.gemini/tmp/` 哈希目录）。
+  **只枚举 Id/路径/数量，绝不读消息正文**；`plan` 自动附带探测结果，把"用户有真实会话 Id 吗"
+  从一句空话变成有证据的选项。任何来源探测失败静默跳过，不拖垮接入
 
 ## [0.4.1] - 2026-09-30
 

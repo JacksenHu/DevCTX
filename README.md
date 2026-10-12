@@ -126,7 +126,8 @@ intake → EXTEND → docs/auth-sms-login.md           ← 改同一份，禁止
 | 命令 | 做什么 |
 |---|---|
 | `scan` | 按"作者 × 时间窗"把 git 历史切成**历史会话画像**（间隔超 14 天自动分窗，例 `legacy-bob`），并列存量文档清单与 TODO/FIXME 半成品信号 |
-| `plan` | 把证据填进接入 SOP，输出这个项目的具体顺序（init → spec 化 → 会话回填 → 文档归并 → 指针 → 体检） |
+| `probe` | 探测本机各工具的本地会话存储（Claude Code `~/.claude/projects/`、Aider 项目内历史、Codex、Continue、Cline/Roo 任务库、Cursor/Windsurf/Trae 工作区存储），**只列 Id/路径/数量，不读消息正文**；`plan` 会自动带上探测结果，把"用户有真实会话 Id 吗"变成有证据的选项 |
+| `plan` | 把证据填进接入 SOP，输出这个项目的具体顺序（init → spec 化 → 会话回填 → 文档归并 → 指针 → 体检），并附 probe 发现的本地会话存储 |
 | `baseline --session S --topic T` | 为每个历史会话写一条**基线重建记录**（agent 固定 `retrofit`）——这就是"压缩各会话 Id"：INDEX 从此列出 `legacy-bob 欠着验证码网关没接完` |
 | `consolidate [--apply]` | 对每份存量 .md 给"并入哪份需求文档 / 独立成篇"建议（**匹配看正文**）；AI 合并后 `--apply` 登记 |
 
@@ -235,7 +236,7 @@ python scripts/init_project.py <项目根> [--all] [--force]
 python scripts/log_handoff.py <项目根> --user-file user.txt --body-file body.md \
     [--agent claude-code --session a1b2c3d4] [--model sonnet] [--intent "EXTEND → docs/auth.md"]
 python scripts/log_handoff.py <项目根> --list | --tail 3 [--agent cursor] | --template | --rebuild-index
-python scripts/retrofit.py <项目根> scan | plan                    # 存量项目：证据清点 / 接入顺序
+python scripts/retrofit.py <项目根> scan | plan | probe           # 存量项目：证据清点 / 接入顺序 / 本机会话存储探测
 python scripts/retrofit.py <项目根> baseline --session legacy-bob --topic auth-sms-login \
     --user-file u.txt --done "..." --next "- [ ] ..." --risks "..."   # 历史会话基线回填
 python scripts/retrofit.py <项目根> consolidate [--apply]          # 存量文档归并建议 / 登记
