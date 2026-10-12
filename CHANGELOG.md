@@ -4,6 +4,40 @@
 
 ## [Unreleased]
 
+### Added
+- **每轮对话压缩规范（`.ai-dev/handoffs/`）**：治"上下文一长就失忆"——压缩从此落到文件且有格式
+  - 每条记录固定四部分：时间戳（ISO 8601 带时区）+ Agent-会话Id + 用户原话（完整，一字不删）
+    + 本轮压缩 `Done` / `Next` / `Verify` / `Risks`（四者可缺省、任意组合，至少一段）
+  - 一条记录一个文件 `<时间戳>-<Agent>-<会话Id>.md`，**只增不改**；`INDEX.md` 一行一条自动汇总，
+    含 Agent / 会话 / **开放 Next 计数**，换模型/换会话/换 Agent 读一个索引即可定位
+  - 新增 `scripts/log_handoff.py`：追加记录、原子重建 INDEX（临时文件 + os.replace + 文件锁）、
+    `--tail N` / `--list` / `--agent` 读取、`--template` / `--init` / `--rebuild-index`
+  - 多 Agent 并发安全：记录各自独立成文件，写方永不覆盖他人；同秒同身份第二次写入自动加序号
+  - 多 Agent 协作约定写进 START_HERE §4：各写各的文件、先读索引的「开放 Next」再动手、
+    接手需注明来源、`HANDOFF.md` 是唯一共享黑板
+- `doctor.py` 新增 handoffs 专项腐化检查：索引与磁盘漂移、记录缺 `devctx-handoff` 标记 /
+  缺用户原话 / 无压缩节（定位到文件名）、记录数超 200 条、HANDOFF.md 落后于流水
+- `archive_handoff.py` 支持 `--max-entries N` / `--entries-only`：把最旧的对话记录搬进
+  `archive/handoffs/`，活跃窗口绝不触碰
+- `init_project.py` 初始化时创建 `handoffs/`、`handoffs/archive/`、复制条目模板为
+  `handoffs/0000-template.md` 并生成空 `INDEX.md`
+- 新增 `tests/`：覆盖压缩规范解析、多 Agent 并发写、INDEX 一致性、归档、ignore 通配
+
+### Fixed
+- **`doctor.py` 语法错误**（`scripts/doctor.py:69` 多余右括号）导致整个脚本无法运行——
+  而 init 收尾、`--fix` 自愈、CI `--check` 全都依赖它
+- `match_ignore` 未实现 `ignore.conf` 文档承诺的 `**` 任意层级通配与 `/` 根锚定，
+  导致 `**/foo`、`/build` 等规则静默失效；改为 glob→正则转换，并保持"后者覆盖前者"的取反语义
+- `init_project.py` 命令检测从不产出 `install` / `run` 键，模板里这两项永远显示"待确认"
+
+### Changed
+- `SKILL.md` / `README.md` / `references/context-protocol.md` 全面写入压缩规范与多 Agent 协作协议；
+  handoff 触发条件从"任务闭环/收工"改为**每轮对话结束**
+- `START_HERE.md` schema 升级到 `v2`：文件地图登记 `handoffs/`，新增 §3 收工协议（压缩规范）、
+  §4 多 Agent 协作约定；`HANDOFF.md` 元信息新增"最近一轮对话记录"字段
+- `_common.py` 的 `POINTER_BODY` 增加两句：新会话读 `handoffs/INDEX.md`、每轮结束追加压缩记录
+- `HANDOFF.md` 与 `handoffs/` 分工明确：前者是当前状态总览（滚动更新），后者是每轮原始流水（只增不改）
+
 ## [0.4.1] - 2026-09-30
 
 ### Changed

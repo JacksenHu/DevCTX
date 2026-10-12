@@ -15,10 +15,60 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import AI_DEV_DIR, find_project_root, read_text, write_text  # noqa: E402
+from _common import (  # noqa: E402
+    AI_DEV_DIR,
+    HANDOFFS_DIR,
+    find_project_root,
+    read_text,
+    write_text,
+)
+import log_handoff  # noqa: E402
 
 MARK = "ARCHIVE-LINE"
 HIST_HEADING = "## 历史完成记录"
+
+
+def archive_entries(root: Path, keep: int = 200) -> int:
+    """Move the oldest per-conversation records into archive/handoffs/.
+
+    Only records BEYOND the newest `keep` are ever moved — the active window is
+    never touched, mirroring the ARCHIVE-LINE rule for HANDOFF.md. Returns the
+    number of records moved.
+    """
+    handoffs = root / AI_DEV_DIR / HANDOFFS_DIR
+    entries = log_handoff.scan_entries(handoffs)
+    if len(entries) <= keep:
+        return 0
+    stale, active = entries[:-keep], entries[-keep:]
+
+    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest_dir = root / AI_DEV_DIR / "archive" / HANDOFFS_DIR
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"handoffs-{ts}.md"
+
+    parts = [
+        f"# 对话压缩记录归档 {ts}",
+        "",
+        f"> 由 archive_handoff.py 从 {HANDOFFS_DIR}/ 自动搬移（保留最近 {keep} 条），仅作留痕。",
+        "",
+    ]
+    for e in stale:
+        parts.append(f"## {e.name}")
+        parts.append("")
+        parts.append(read_text(e.path).rstrip())
+        parts.append("")
+    write_text(dest, "\n".join(parts).rstrip() + "\n")
+
+    for e in stale:
+        try:
+            e.path.unlink()
+        except OSError:
+            pass
+
+    log_handoff.rebuild_index(handoffs)
+    print(f"[+] {len(stale)} record(s) -> {AI_DEV_DIR}/archive/{HANDOFFS_DIR}/{dest.name}; "
+          f"{len(active)} active record(s) kept.")
+    return len(stale)
 
 
 def archive(root: Path, max_lines: int) -> int:
@@ -80,9 +130,24 @@ def archive(root: Path, max_lines: int) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("project", nargs="?", default=".")
-    ap.add_argument("--max-lines", type=int, default=120)
+    ap.add_argument("--max-lines", type=int, default=120,
+                    help="HANDOFF.md 行数上限（活跃区超限只提示，不自动删）")
+    ap.add_argument("--max-entries", type=int, default=200, metavar="N",
+                    help=f"{HANDOFFS_DIR}/ 记录数上限，超出则把最旧的搬进 archive/")
+    ap.add_argument("--entries-only", action="store_true",
+                    help="只归档对话流水记录，不碰 HANDOFF.md")
     args = ap.parse_args()
-    return archive(find_project_root(args.project), args.max_lines)
+    root = find_project_root(args.project)
+    if args.entries_only:
+        moved = archive_entries(root, args.max_entries)
+        if not moved:
+            print(f"[=] {HANDOFFS_DIR}/ 记录数在 {args.max_entries} 以内，无需归档。")
+        return 0
+    rc = archive(root, args.max_lines)
+    if rc != 0:
+        return rc
+    archive_entries(root, args.max_entries)
+    return 0
 
 
 if __name__ == "__main__":

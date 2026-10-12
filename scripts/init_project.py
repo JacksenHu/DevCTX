@@ -17,11 +17,21 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import AI_DEV_DIR, find_project_root, read_text, write_text  # noqa: E402
+from _common import (  # noqa: E402
+    AI_DEV_DIR,
+    HANDOFFS_DIR,
+    INDEX_NAME,
+    ENTRY_TEMPLATE_NAME,
+    find_project_root,
+    read_text,
+    write_text,
+)
 import sync_rules  # noqa: E402
+import log_handoff  # noqa: E402
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = SKILL_ROOT / "assets" / "templates"
+HERE_NAME = "scripts"
 
 # template file -> destination relative to .ai-dev/
 COPY_MAP = {
@@ -248,6 +258,13 @@ def init(root: Path, mode: str, force: bool) -> int:
     ai.mkdir(parents=True, exist_ok=True)
     (ai / "archive").mkdir(exist_ok=True)
     (ai / "decisions").mkdir(exist_ok=True)
+    handoffs = ai / HANDOFFS_DIR
+    handoffs.mkdir(exist_ok=True)
+    (handoffs / "archive").mkdir(exist_ok=True)
+    entry_tpl = handoffs / ENTRY_TEMPLATE_NAME
+    if not entry_tpl.exists() and (TEMPLATES / "handoff-entry.md").is_file():
+        write_text(entry_tpl, read_text(TEMPLATES / "handoff-entry.md"))
+        print(f"[+] created {AI_DEV_DIR}/{HANDOFFS_DIR}/{ENTRY_TEMPLATE_NAME}")
 
     today = _dt.date.today().isoformat()
     for src_name, dest_rel in COPY_MAP.items():
@@ -263,6 +280,9 @@ def init(root: Path, mode: str, force: bool) -> int:
             text = fill_project_brief(text, root)
         write_text(dest, text)
         print(f"[+] created {AI_DEV_DIR}/{dest_rel}")
+
+    n, _ = log_handoff.rebuild_index(handoffs)
+    print(f"[+] created {AI_DEV_DIR}/{HANDOFFS_DIR}/{INDEX_NAME}（{n} 条）")
 
     r = subprocess.run(
         [sys.executable, str(Path(__file__).parent / "build_index.py"), str(root)],
@@ -285,8 +305,13 @@ def init(root: Path, mode: str, force: bool) -> int:
         "lessons.md 初始可空，后续 HANDOFF 陷阱区某坑重复出现第二次再提升进来。"
         "事实只来自代码与用户，不确定标\"待确认\"，禁止编造。\n"
         "3. 用 architecture.md 写清模块分区与\"改什么去哪改\"速查。\n"
-        "4. 初始化 HANDOFF.md 当前状态；然后用一句话告诉用户\"已接入，以后直接提需求即可\"。\n"
-        "5. 用户无需手动运行任何脚本；其他 IDE 新开会话即由指针自动引导到 START_HERE.md。"
+        f"4. 初始化 HANDOFF.md 当前状态；然后用一句话告诉用户\"已接入，以后直接提需求即可\"。\n"
+        "5. **此后每轮对话结束（你输出回复之后）都要往 "
+        f"{AI_DEV_DIR}/{HANDOFFS_DIR}/ 追加一条压缩记录**"
+        "（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），"
+        f"运行 {HERE_NAME}/log_handoff.py 或按 {ENTRY_TEMPLATE_NAME} 手工写；"
+        "这是多会话并发、换 Agent 不丢上下文的关键，不等大任务完成。\n"
+        "6. 用户无需手动运行任何脚本；其他 IDE 新开会话即由指针自动引导到 START_HERE.md。"
     )
     return 0
 

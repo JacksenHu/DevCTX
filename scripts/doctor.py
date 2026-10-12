@@ -13,11 +13,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from _common import AI_DEV_DIR, find_project_root, load_ignore_lines, read_text, write_text  # noqa: E402
+from _common import AI_DEV_DIR, HANDOFFS_DIR, find_project_root, load_ignore_lines, read_text, write_text  # noqa: E402
 import sync_rules  # noqa: E402
 import build_index  # noqa: E402
 import archive_handoff  # noqa: E402
 import init_project  # noqa: E402
+import log_handoff  # noqa: E402
 
 REQUIRED = [
     "START_HERE.md", "HANDOFF.md", "project-brief.md",
@@ -27,6 +28,8 @@ L2_DOCS = ["project-brief.md", "architecture.md", "conventions.md"]
 OPTIONAL_DOCS = ["glossary.md", "lessons.md"]
 HANDOFF_LIMIT = 120
 FILLED_RATIO = 0.25
+HANDOFFS_ENTRY_LIMIT = 200      # 超过就该归档旧条目
+HANDOFFS_MALFORMED_LIMIT = 5    # 格式待修条目超过这个数视为腐化
 
 
 @dataclass
@@ -66,7 +69,7 @@ def check_files(ai: Path, fix: bool) -> list[Finding]:
             out.append(Finding("ok", "files", f"created missing: {', '.join(missing)}"))
         else:
             out.append(Finding("err", "files",
-                               f"missing {', '.join(missing)}; rerun with --fix")))
+                               f"missing {', '.join(missing)}; rerun with --fix"))
     else:
         out.append(Finding("ok", "files", "all required context files present"))
 
@@ -184,6 +187,92 @@ def check_schema(ai: Path) -> list[Finding]:
                     "START_HERE.md has no devctx-schema marker; old project, rerun init with --force to update")]
 
 
+def check_handoffs(root: Path, ai: Path, fix: bool) -> list[Finding]:
+    """腐化检查：对话流水目录本身、索引一致性、条目格式、体积。"""
+    out = []
+    handoffs = ai / HANDOFFS_DIR
+    if not handoffs.is_dir():
+        if fix:
+            log_handoff.cmd_init(root)
+            return [Finding("ok", "handoffs", f"created {HANDOFFS_DIR}/ + empty index")]
+        return [Finding("warn", "handoffs",
+                        f"{HANDOFFS_DIR}/ missing; every turn should append a record — "
+                        "rerun with --fix to create it")]
+
+    entries = log_handoff.scan_entries(handoffs)
+    idx = handoffs / log_handoff.INDEX_NAME
+
+    if not entries:
+        if fix:
+            log_handoff.rebuild_index(handoffs)
+            out.append(Finding("ok", "handoffs", f"{HANDOFFS_DIR}/ empty (no records yet)"))
+        else:
+            out.append(Finding("warn", "handoffs",
+                               f"{HANDOFFS_DIR}/ has no records; compression never ran"))
+        return out
+
+    # 索引与磁盘一致性：数量不符就是漂移
+    idx_count = None
+    if idx.is_file():
+        m = re.search(r"条目数：(\d+)", read_text(idx))
+        idx_count = int(m.group(1)) if m else None
+    if idx_count is None:
+        if fix:
+            n, _ = log_handoff.rebuild_index(handoffs)
+            out.append(Finding("ok", "handoffs", f"index rebuilt ({n} records)"))
+        else:
+            out.append(Finding("warn", "handoffs",
+                               f"{log_handoff.INDEX_NAME} unreadable or header missing; "
+                               "rerun with --fix"))
+    elif idx_count != len(entries):
+        if fix:
+            n, _ = log_handoff.rebuild_index(handoffs)
+            out.append(Finding("ok", "handoffs",
+                               f"index rebuilt: {idx_count} -> {n} records"))
+        else:
+            out.append(Finding("warn", "handoffs",
+                               f"index says {idx_count} record(s) but {len(entries)} on disk "
+                               "(drifted); rerun with --fix"))
+
+    # 条目格式：缺 schema / 缺用户原话 / 无压缩节
+    bad = [e for e in entries if e.malformed]
+    if len(bad) > HANDOFFS_MALFORMED_LIMIT:
+        detail = "; ".join(f"{e.name}:{','.join(e.malformed)}" for e in bad[:3])
+        out.append(Finding("err", "handoffs",
+                           f"{len(bad)} record(s) violate the compression spec "
+                           f"(> {HANDOFFS_MALFORMED_LIMIT}); e.g. {detail}"))
+    elif bad:
+        detail = "; ".join(f"{e.name}:{','.join(e.malformed)}" for e in bad[:3])
+        out.append(Finding("warn", "handoffs",
+                           f"{len(bad)} record(s) incomplete; e.g. {detail}"))
+    else:
+        out.append(Finding("ok", "handoffs",
+                           f"{len(entries)} record(s) all match the compression spec"))
+
+    # 体积：条目太多该归档，否则新会话读索引越来越贵
+    if len(entries) > HANDOFFS_ENTRY_LIMIT:
+        if fix:
+            moved = archive_handoff.archive_entries(root, HANDOFFS_ENTRY_LIMIT)
+            out.append(Finding("ok", "handoffs",
+                               f"archived {moved} old record(s) to archive/{HANDOFFS_DIR}/"))
+        else:
+            out.append(Finding("warn", "handoffs",
+                               f"{len(entries)} records > {HANDOFFS_ENTRY_LIMIT}; "
+                               "rerun with --fix to archive the oldest"))
+    else:
+        out.append(Finding("ok", "handoffs", f"{len(entries)} record(s) within budget"))
+
+    # HANDOFF.md 不能落后于流水：否则"当前状态"和"每轮记录"对不上
+    h = ai / "HANDOFF.md"
+    if h.is_file() and idx.is_file():
+        newest = max(e.path.stat().st_mtime for e in entries)
+        if h.stat().st_mtime + 60 < newest:
+            out.append(Finding("warn", "handoffs",
+                               "HANDOFF.md is older than the newest record; "
+                               "roll the latest record into HANDOFF.md"))
+    return out
+
+
 def run_doctor(root: Path, fix: bool) -> list[Finding]:
     ai = root / AI_DEV_DIR
     if not ai.is_dir():
@@ -193,6 +282,7 @@ def run_doctor(root: Path, fix: bool) -> list[Finding]:
     findings += check_files(ai, fix)
     findings += check_index(root, ai, fix)
     findings += check_handoff(ai, root, fix)
+    findings += check_handoffs(root, ai, fix)
     findings += check_pointers(root, fix)
     findings += check_git(root)
     findings += check_schema(ai)

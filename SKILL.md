@@ -1,6 +1,6 @@
 ---
 name: devctx
-description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 每轮对话结束或任务闭环或切换前自动写交接（handoff）、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
+description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。每轮对话结束自动往 .ai-dev/handoffs/ 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），支持多 Agent 并发协作不互相覆盖。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 每轮对话结束或任务闭环或切换前自动写交接（handoff）、按压缩规范记录到 handoffs/、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
 ---
 
 # Cross-IDE Dev Context — 跨工具无缝开发协议
@@ -16,9 +16,11 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 
 切换工具/模型之所以贵，是因为项目认知只存在易失的对话历史里。本技能把它**外置为项目内一套文件**：
 
-- **单一事实源** `.ai-dev/`：L1 入口 START_HERE、L2 长期记忆（project-brief / architecture / conventions / glossary / lessons / code-index）、L3 工作记忆 HANDOFF 与 decisions/。
+- **单一事实源** `.ai-dev/`：L1 入口 START_HERE、L2 长期记忆（project-brief / architecture / conventions / glossary / lessons / code-index）、L3 工作记忆 HANDOFF、`handoffs/` 每轮对话压缩流水与 decisions/。
 - **薄指针**：各工具私有规则文件只写十几行"自动去读 .ai-dev/"，脚本统一生成，规则绝不复制多份。
-- **固定开销极小**：新会话只读 START_HERE + HANDOFF（约 1000 token）恢复现场，其余按需，禁止全仓扫描。
+- **固定开销极小**：新会话只读 START_HERE + HANDOFF + handoffs/INDEX.md（约 1000 token）恢复现场，其余按需，禁止全仓扫描。
+- **每轮压缩**：每轮对话结束都往 `handoffs/` 追加一条独立记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），
+  而不是把所有东西堆进单个 HANDOFF.md——后者会无限膨胀，且并行 Agent 会互相覆盖。
 
 ## 触发判断
 
@@ -26,11 +28,11 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 |---|---|---|
 | 项目没有 `.ai-dev/`，或用户要"多 IDE 统一/接入规范/无缝切换" | **init 全链** | 用户意图 |
 | 新会话、换 IDE/模型、"接着上次做" | **resume** | AI 自动 |
-| 任务闭环、每轮对话结束、要切工具/模型、用户说"收工" | **handoff** | AI 自动 |
+| **每轮对话结束（你输出回复之后）** | **handoff**：往 `handoffs/` 追加一条压缩记录 + 滚动更新 HANDOFF.md | AI 自动 |
 | 增删/移动源码文件或模块 | **reindex**（必要时同步 architecture） | AI 自动 |
 | 难以逆转的选型/架构决定 | **decision**（ADR） | 用户意图 |
 | 新装工具、指针被覆盖、用户问"状态/正常吗/检查一下" | **doctor / sync** | 用户意图或 AI 自动 |
-| HANDOFF 超约 120 行 | **archive** | AI 自动 |
+| `handoffs/` 记录超过约 200 条 | **archive**（搬最旧的进 `archive/handoffs/`，活跃窗口不动） | AI 自动 |
 | 用户说"用 spec/sdd/speckit 做 XXX" | **speckit 全链**（见 §6） | 用户意图 |
 
 ## 1. init 全链（每个项目一次，AI 自动完成）
@@ -43,8 +45,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
    - 起草后把"仅靠代码定不了、又会改变后续方向"的关键问题（真实运行命令、业务术语含义、本期边界）**一次性集中**向用户确认，不逐条打断、不为问而问；
    - architecture 要写出模块分区与"改什么去哪改"速查；HANDOFF 写入初始状态，元信息"进行中的 spec"列出所有未闭环的 spec；
    - 补项目特有忽略到 `.ai-dev/ignore.conf`（部署运行时目录、构建产物、凭据目录），重建一次索引；
-   - 跑一次 `doctor.py --fix` 确认全绿。
-4. 用一句话向用户交付："已接入，以后直接提需求；换其他 IDE 新开会话即自动接续"，并说明哪些项待他决策（如 git、过期凭据），不罗列过程。
+   - 跑一次 `doctor.py --fix` 确认全绿。4. 用一句话向用户交付："已接入，以后直接提需求；换其他 IDE 新开会话即自动接续"，并说明哪些项待他决策（如 git、过期凭据），不罗列过程。
 
 ### 无 Python 降级路径（环境无 python/python3 时）
 
@@ -57,34 +58,93 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 
 ## 2. resume（新会话自动执行，不要求用户提醒）
 
-1. 读 START_HERE + HANDOFF，暂不预读 L2；沿 HANDOFF「下一步」继续。若 HANDOFF 记了"进行中的 spec"，按该路径读 `specs/<名>/tasks.md` 对应条目继续 speckit 流程。
-2. 一两句话对齐现状即可，任务清晰直接开工，有歧义/风险才确认。
-3. 定位代码先查 code-index，只精读目标文件；文档与代码冲突以代码为准并回写文档。动手前先查 `lessons.md`。
-4. 工具不自动加载规则文件时，用 references/tool-integrations.md §4 的开场白兜底。
+1. 读 START_HERE + HANDOFF + `handoffs/INDEX.md`，暂不预读 L2；沿 HANDOFF「下一步」继续。
+   `INDEX.md` 的「开放 Next」列是**任何 Agent（含其他人）还欠的活**，动手前先扫，避免撞车。
+   若 HANDOFF 记了"进行中的 spec"，按该路径读 `specs/<名>/tasks.md` 对应条目继续 speckit 流程。
+2. 需要某一轮的完整上下文时，按索引文件名读 `handoffs/<该条>.md`；
+   有本技能时可直接跑 `scripts/log_handoff.py <根> --tail N`（加 `--agent X` 可只看某个 Agent）。
+3. 一两句话对齐现状即可，任务清晰直接开工，有歧义/风险才确认。
+4. 定位代码先查 code-index，只精读目标文件；文档与代码冲突以代码为准并回写文档。动手前先查 `lessons.md`。
+5. 工具不自动加载规则文件时，用 references/tool-integrations.md §4 的开场白兜底。
 
-## 3. handoff（每轮对话结束自动执行，省 token 的核心）
+## 3. handoff（**每轮对话结束自动执行**，省 token 的核心）
 
-**每轮对话结束都要写，不要等大任务完成。** 这是多会话并发、换 agent 不丢上下文的关键：每轮对话的工作都压缩进 HANDOFF，下一轮（无论哪个 agent、哪个工具、哪个会话）读 START_HERE + HANDOFF 就能无缝接续。
+**每轮对话结束（你输出回复之后）都要写，不要等大任务完成。** 这是多会话并发、换 agent 不丢上下文的关键。
+单个 `HANDOFF.md` 装不下"每轮都写"（无限膨胀）且并行 Agent 会互相覆盖，因此每轮写**独立小文件**进 `.ai-dev/handoffs/`，
+由 `INDEX.md` 一行一条汇总——换模型/换会话/换 Agent 后读一个索引即可定位并恢复现场。
 
-按 HANDOFF 模板更新，取舍标准：**"下一个模型不知道它，会不会走错路或重复劳动？"**
-留：目标、可验证完成项、有序下一步、新约束/决策、失败路径、改动文件及原因；
-删：对话过程、大段代码/日志、代码自解释的细节。结构变动顺手 reindex，重大决策补 ADR。
-**HANDOFF 陷阱区里某个坑重复出现第二次，就提升到 `lessons.md`**（永久教训，不随 handoff 压缩丢失）；动手前先查 lessons.md，避免重蹈覆辙。
-若项目用了 speckit / Spec Kit（存在 `.specify/` 或 `specs/`），handoff 时**自动**：列出 `specs/` 下未闭环的 spec，读对应 `tasks.md` 勾选项算进度（已完成 N / 共 M 条），把"specs/<名>/tasks.md 第 N/M 条（正在做什么）"写进 HANDOFF 元信息；已闭环的 spec 不写。spec.md / plan.md / tasks.md 归 `specs/`，不要复制进 `.ai-dev/`。
+### 3.1 每轮压缩规范
+
+每条记录必须包含四部分，其中**后四段可缺省、可任意组合，但至少要有一段**：
+
+```text
+1. 时间戳        ISO 8601 带时区，例 2026-10-12T16:20:33+08:00
+2. Agent-会话Id  哪个 Agent、哪个会话产生的，例 claude-code / a1b2c3d4
+3. 用户原话      用户这一轮的完整原始需求，一字不删、不改写、不概括
+4. 本轮压缩      Done / Next / Verify / Risks 任意组合
+```
+
+| 段 | 写什么 | 取舍标准 |
+|---|---|---|
+| `Done` | 已经做了什么，具体到可验证结果（改了哪个文件、跑到什么状态） | 下一个模型不知道它，会不会走错路或重复劳动？会则留 |
+| `Next` | 下一步做什么，按依赖排序，用 `- [ ]`，完成即勾选 | 同上 |
+| `Verify` | 要跑什么测试 / 命令来证明 Done 真的成立 | 同上 |
+| `Risks` | 有什么坑：试过且走不通的路、容易踩的雷、要避开的事项 | 同上 |
+
+删：对话过程、情绪与寒暄、已被代码自解释的实现细节、大段代码/日志/报错原文（写路径即可）。
+**用户原话必须完整**——它是换 Agent 后还原"到底要做什么"的唯一依据，禁止概括。
+
+### 3.2 落地方式（有脚本 / 无脚本两条路）
+
+- **有本技能**：调用 `scripts/log_handoff.py <项目根>`。用户原话走 `--user-file`（长消息一字不删），
+  压缩正文走 `--body-file`（含 `### Done` 等标题）或直接用 `--done/--next/--verify/--risks` 快捷参数。
+  Agent / 会话 Id 用 `--agent` / `--session` 显式指定，**同一会话内复用同一个 session id**，换会话必须换 Id；
+  也可设环境变量 `DEVCTX_AGENT` / `DEVCTX_SESSION_ID`。脚本自动追加记录并原子重建 `INDEX.md`，并发写不会互相覆盖。
+- **无 Python 降级**：照 `assets/templates/handoff-entry.md`（已复制为 `.ai-dev/handoffs/0000-template.md`）手工写一个文件到
+  `.ai-dev/handoffs/`，文件名 `<时间戳>-<Agent>-<会话Id>.md`，再在 `INDEX.md` 补一行。
+  时间戳用当前时间；Agent 写你所在工具名；会话 Id 自己生成一个短 id 并在本会话内复用。
+
+### 3.3 每轮顺手：滚动更新 `HANDOFF.md`
+
+把 `handoffs/` 里最新那条的结论并进 `HANDOFF.md` 顶部（当前任务 / 进度 / 下一步 / 陷阱 / 改动清单），
+让只读 `HANDOFF.md` 的会话也能恢复现场。`HANDOFF.md` 是当前状态总览，`handoffs/` 是每轮原始流水，不复制内容只做汇总。
+结构变动顺手 reindex，重大决策补 ADR。
+**HANDOFF 陷阱区某个坑重复出现第二次，就提升到 `lessons.md`**（永久教训，不随压缩丢失）；动手前先查 lessons.md。
+
+### 3.4 多 Agent 协作
+
+- **各写各的文件**：一条记录一个文件，文件名带 Agent 与会话 Id，永不覆盖别人的记录。
+- **先读索引再动手**：读 `handoffs/INDEX.md` 的「开放 Next」列看有没有人正在做同一件事；
+  要接手别人的活，先读那条记录拿完整上下文，再在自己的记录里写明"接手自 <文件名>"。
+- **`HANDOFF.md` 是共享黑板**：唯一被所有人滚动更新的文件，冲突时以代码现状为准，并把冲突写进自己那条记录的 `Risks`。
+- 若项目用了 speckit / Spec Kit（存在 `.specify/` 或 `specs/`），handoff 时**自动**：列出 `specs/` 下未闭环的 spec，
+  读对应 `tasks.md` 勾选项算进度（已完成 N / 共 M 条），把"specs/<名>/tasks.md 第 N/M 条（正在做什么）"写进 HANDOFF 元信息；
+  已闭环的 spec 不写。spec.md / plan.md / tasks.md 归 `specs/`，不要复制进 `.ai-dev/`。
 
 ## 4. 维护脚本（AI 调用；均纯标准库、跨平台、UTF-8、幂等）
 
 ```text
-scripts/init_project.py <根> [--all] [--force]   # 初始化 + 首份索引 + 指针
+scripts/init_project.py <根> [--all] [--force]   # 初始化 + 首份索引 + 指针 + handoffs/
+scripts/log_handoff.py <根>                      # 追加一轮压缩记录 + 重建 INDEX（每轮收工调用）
+    --user-file U --body-file B [--agent A] [--session S] [--model M]
+    --user "..." --done "..." --next "..." --verify "..." --risks "..."   # 快捷参数，可缺省组合
+    --template                # 打印条目模板
+    --list / --tail N [--agent A]   # 读：全部一览 / 最近 N 条全文（换 Agent 后恢复现场）
+    --rebuild-index / --init  # 只重建索引 / 建 handoffs/
 scripts/build_index.py <根> [--max-lines 1200]   # 重建代码地图（尊重 .gitignore 与 ignore.conf）
 scripts/sync_rules.py <根> [--all] [--inject] [--check]   # 指针同步/校验
-scripts/archive_handoff.py <根> [--max-lines 120]         # 只搬归档线以下历史
-scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/git误忽略
+scripts/archive_handoff.py <根> [--max-lines 120] [--max-entries 200] [--entries-only]
+scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/git误忽略/handoffs腐化
 ```
 
+- **log_handoff**：一条记录一个文件，只增不改；`INDEX.md` 用临时文件 + 原子替换重建，并有文件锁，
+  多 Agent 并发写安全。同秒同 Agent 同会话的第二次写入自动加序号防碰撞。
 - **sync_rules**：纯指针随时刷新；手写规则文件默认不覆盖只报 conflict，`--inject` 用 begin/end 标记块注入、块外内容绝不丢，可重复执行。
-- **archive_handoff**：绝不触碰归档线以上的活跃区；活跃区本身超限只提示 AI 手工压缩。
-- **doctor**：无参数出分级报告（退出码 0 健康 / 1 警告 / 2 错误）；`--fix` 自动补缺、重建过时索引、归档、同步指针。用户问"正常吗/检查下"或 init 收尾时运行。
+- **archive_handoff**：绝不触碰归档线以上的活跃区；`--max-entries` 只把最旧的对话记录搬进 `archive/handoffs/`，活跃窗口不动；
+  活跃区本身超限只提示 AI 手工压缩。
+- **doctor**：无参数出分级报告（退出码 0 健康 / 1 警告 / 2 错误）；`--fix` 自动补缺、重建过时索引、归档、同步指针、
+  重建 handoffs 索引。handoffs 专项检查：索引与磁盘漂移、记录缺 schema/缺用户原话/无压缩节、记录数超限、
+  HANDOFF.md 落后于流水。用户问"正常吗/检查下"或 init 收尾时运行。
 - 新增工具支持：只改 `scripts/_common.py` 的 TOOL_SPECS 一处。
 
 ## 5. decision（ADR）
@@ -134,13 +194,16 @@ handoff 时自动读 `specs/<进行中名>/tasks.md`，数勾选数量（已完�
 
 ## 资源索引
 
-- `assets/templates/` — 复制进项目的全部上下文模板（自包含，不依赖本技能）
-- `references/context-protocol.md` — 分层模型、token 预算、SOP 细节、无脚本降级与反模式；定制协议或用户追问原理时读
+- `assets/templates/` — 复制进项目的全部上下文模板（自包含，不依赖本技能）；
+  其中 `handoff-entry.md` 是每轮对话压缩记录的格式模板，会复制为 `.ai-dev/handoffs/0000-template.md`
+- `references/context-protocol.md` — 分层模型、token 预算、每轮压缩规范、SOP 细节、无脚本降级与反模式；定制协议或用户追问原理时读
 - `references/tool-integrations.md` — 各工具规则位置/加载机制（含 Trae Work CN 专项）、兜底挂载、团队 git/CI；具体工具适配时读
 
 ## 完成前自检
 
 - `.ai-dev/` 必备文件齐全，L2 是据实填写的实质内容而非空模板（glossary / lessons 可选，存在则应已填写）；doctor 无 error。
+- `handoffs/` 已初始化，本轮对话已追加一条符合压缩规范的记录（时间戳 + Agent-会话Id + 完整用户原话 + 至少一段 Done/Next/Verify/Risks），
+  `INDEX.md` 与磁盘记录数一致，`HANDOFF.md` 已滚动进最新结论。
 - code-index 与当前文件结构一致、无运行时噪音；在用工具指针同步、手写规则未被破坏。
 - HANDOFF 能让全新会话仅凭它 + START_HERE 对齐现状，且不超长。
 - 全程未让用户手动执行命令；无 Python 时已走降级路径落地。

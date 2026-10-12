@@ -47,7 +47,7 @@
 | L0 工具指针 | `AGENTS.md`、`CLAUDE.md`、`.cursor/rules/…`、`.trae/rules/…` 等 | 工具启动时自动读，仅十几行，指向 `.ai-dev/` |
 | L1 入口 | `.ai-dev/START_HERE.md` | **每个新会话必读** |
 | L2 长期记忆 | `project-brief / architecture / conventions / glossary / lessons / code-index` | 遇到对应问题才按需读 |
-| L3 工作记忆 | `HANDOFF.md` + `decisions/` | **每个新会话必读**，每轮对话结束自动更新 |
+| L3 工作记忆 | `HANDOFF.md`（当前状态总览）+ `handoffs/`（每轮对话压缩流水）+ `decisions/` | **每个新会话必读**，每轮对话结束自动追加 |
 
 新会话固定开销只有 L1 + L3（目标控制在约 1k token 量级），L2 与源码按需加载。相比让 AI 重扫整个仓库，省一个数量级以上。
 
@@ -55,6 +55,38 @@
 - HANDOFF 陷阱区记**本次临时坑**（易失，随 handoff 压缩）
 - 某个坑**重复出现第二次**，提升到 lessons.md（持久，跨阶段生效）
 - 新 agent 动手前先查 lessons.md——"这个项目永远不能这么干"——避免重蹈覆辙
+
+## 每轮对话压缩规范：治"上下文一长就失忆"
+
+失忆的根因是压缩没有落到文件、也没有格式。devctx 把压缩定义为**每轮对话结束必须追加一条独立记录**到 `.ai-dev/handoffs/`：
+
+```text
+1. 时间戳        ISO 8601 带时区，例 2026-10-12T16:20:33+08:00
+2. Agent-会话Id  哪个 Agent、哪个会话产生的，例 claude-code / a1b2c3d4
+3. 用户原话      用户这一轮的完整原始需求，一字不删、不改写、不概括
+4. 本轮压缩      Done / Next / Verify / Risks 任意组合（可缺省，至少一段）
+```
+
+| 段 | 写什么 |
+|---|---|
+| `Done` | 已经做了什么，具体到可验证结果（改了哪个文件、跑到什么状态） |
+| `Next` | 下一步做什么，按依赖排序，`- [ ]` 形式，完成即勾选 |
+| `Verify` | 要跑什么测试 / 命令证明 Done 真的成立 |
+| `Risks` | 有什么坑：试过且走不通的路、容易踩的雷、要避开的事项 |
+
+**为什么不全写进单个 `HANDOFF.md`**：单文件既会无限膨胀（token 预算失控），又会因并行 Agent 互相覆盖而丢记录。
+`handoffs/` 一条记录一个文件（`<时间戳>-<Agent>-<会话Id>.md`，只增不改），
+`INDEX.md` 一行一条汇总（含 Agent / 会话 / **开放 Next 计数**）——换模型、换会话、换 Agent 后读一个索引就能定位，
+需要完整上下文时再按文件名读那一条。`HANDOFF.md` 仍是**当前状态总览**，每轮把最新结论并进去。
+
+**多 Agent 并发安全**：记录各自独立成文件，写方永不覆盖他人；`INDEX.md` 用"临时文件 + 原子替换"重建并加文件锁。
+多个 Agent / 多个会话同时改一个项目，靠三条约定协作：
+
+- 各写各的文件，先读 `INDEX.md` 的「开放 Next」列再动手，避免撞车；
+- 接手别人的活，先读那条记录，再在自己记录里写明"接手自 \<文件名\>"；
+- `HANDOFF.md` 是唯一共享黑板，冲突时以代码现状为准，并把冲突写进自己那条的 `Risks`。
+
+> 上下文长到失忆时才想起交接，已经晚了——每轮都写，成本才是一条记录的几十行。
 
 ## 安装（3 步，零配置）
 
@@ -99,10 +131,11 @@
 
 ## 日常工作流（AI 自动执行）
 
-- **init（每个项目一次）**：初始化 `.ai-dev/`、自动检测技术栈（Node/Python/Go/Rust + monorepo 子包 + .env 变量）、首份代码索引、工具指针，并由 AI 据实起草 L2 文档（project-brief / architecture / conventions / glossary；lessons 初始可空）。**自动 spec 化项目现状**：扫 TODO/FIXME/半成品，已完成的写 spec.md，未完成的完整跑 spec → plan → tasks。
-- **resume（新会话自动）**：读 START_HERE + HANDOFF，沿"下一步"继续；动手前先查 lessons.md。
-- **handoff（每轮对话结束自动）**：压缩本轮工作进 HANDOFF；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。
-- **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、`.ai-dev` 被 git 误忽略、schema 版本过期等七类腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
+- **init（每个项目一次）**：初始化 `.ai-dev/`（含 `handoffs/` 与其模板）、自动检测技术栈（Node/Python/Go/Rust + monorepo 子包 + .env 变量）、首份代码索引、工具指针，并由 AI 据实起草 L2 文档（project-brief / architecture / conventions / glossary；lessons 初始可空）。**自动 spec 化项目现状**：扫 TODO/FIXME/半成品，已完成的写 spec.md，未完成的完整跑 spec → plan → tasks。
+- **resume（新会话自动）**：读 START_HERE + HANDOFF + `handoffs/INDEX.md`，沿"下一步"继续；动手前先查 lessons.md。
+- **handoff（每轮对话结束自动）**：往 `handoffs/` 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），并把最新结论滚动进 HANDOFF.md；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。
+- **archive（记录超量自动）**：HANDOFF 超 120 行搬历史区，`handoffs/` 超 200 条搬最旧的进 `archive/handoffs/`，活跃窗口不动。
+- **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
 
 ## 已覆盖的 AI 工具（12 种，可扩展）
 
@@ -114,15 +147,17 @@ AGENTS.md 通用兜底（Codex / Amp / Zed）、Claude Code、Cursor（新版 .m
 devctx/
 ├── SKILL.md                     # 唯一入口：AI 的操作手册（触发判断、自动动作链、降级路径）
 ├── scripts/                     # AI 调用的工具，用户无需运行
-│   ├── init_project.py          # 初始化 .ai-dev + 技术栈检测 + 首份索引 + 工具指针
+│   ├── init_project.py          # 初始化 .ai-dev（含 handoffs/）+ 技术栈检测 + 首份索引 + 工具指针
+│   ├── log_handoff.py           # 每轮对话压缩记录：追加记录 + 重建 INDEX + 读最近记录（多 Agent 并发安全）
 │   ├── build_index.py           # 生成代码地图（尊重 .gitignore 与 ignore.conf）
 │   ├── sync_rules.py            # 生成/校验/注入各工具薄指针（幂等）
-│   ├── archive_handoff.py       # 安全归档超长 HANDOFF 历史
-│   ├── doctor.py                # 健康体检 + --fix 自动修复
-│   └── _common.py               # 工具映射表、项目根探测、忽略匹配
+│   ├── archive_handoff.py       # 安全归档超长 HANDOFF 历史与超量对话记录
+│   ├── doctor.py                # 健康体检 + --fix 自动修复（含 handoffs 腐化检查）
+│   └── _common.py               # 工具映射表、项目根探测、忽略匹配、Agent/会话识别
 ├── assets/templates/            # 初始化时复制进项目的自包含模板
 │   ├── START_HERE.md            # L1 入口
-│   ├── HANDOFF.md               # L3 工作记忆
+│   ├── HANDOFF.md               # L3 工作记忆（当前状态总览）
+│   ├── handoff-entry.md         # 每轮对话压缩记录模板（复制为 handoffs/0000-template.md）
 │   ├── project-brief.md         # L2：项目定位/运行命令
 │   ├── architecture.md          # L2：模块分区/改什么去哪改
 │   ├── conventions.md           # L2：编码/命名/提交规范
@@ -139,13 +174,17 @@ devctx/
 
 ```bash
 python scripts/init_project.py <项目根> [--all] [--force]
+python scripts/log_handoff.py <项目根> --user-file user.txt --body-file body.md \
+    [--agent claude-code --session a1b2c3d4] [--model sonnet]
+python scripts/log_handoff.py <项目根> --list | --tail 3 [--agent cursor] | --template | --rebuild-index
 python scripts/build_index.py  <项目根> [--max-lines 1200] [--max-depth 4]
 python scripts/sync_rules.py   <项目根> [--all] [--inject] [--check]
-python scripts/archive_handoff.py <项目根> [--max-lines 120]
+python scripts/archive_handoff.py <项目根> [--max-lines 120] [--max-entries 200] [--entries-only]
 python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 错误
 ```
 
 全部脚本纯 Python 标准库、跨平台、UTF-8、幂等；手写规则文件默认绝不覆盖。
+`log_handoff.py` 的记录只增不改，`INDEX.md` 原子重建并加锁，多 Agent 并发写安全。
 
 ## 设计原则
 

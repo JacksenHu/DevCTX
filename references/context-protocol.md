@@ -22,15 +22,17 @@
 | L0 工具指针 | CLAUDE.md、.cursor/rules 等 | 自动生成，约 10 行 | 工具启动时自己读 | sync 脚本 |
 | L1 入口 | `.ai-dev/START_HERE.md` | 稳定，加载协议+文件地图 | **每个新会话必读** | 协议变化时 |
 | L2 长期记忆 | project-brief / architecture / conventions / glossary / lessons / code-index | 缓慢变化 | 按需：遇到对应问题才读 | AI 随改动更新；索引脚本重建 |
-| L3 工作记忆 | `.ai-dev/HANDOFF.md` + decisions/ | 快速变化 | **每个新会话必读** | 每次收工更新；超限归档 |
+| L3 工作记忆 | `.ai-dev/HANDOFF.md`（当前状态总览）+ `handoffs/`（每轮压缩流水）+ `decisions/` | 快速变化 | **每个新会话必读** | 每轮收工追加一条记录；超限归档 |
 
 新会话固定开销只有 L1 + L3；L2 按需取；源码最后读。这与“先把整个仓库塞进上下文”
 的路线相反：用一次小而确定的读取，替代一次大而盲目的扫描。
 
 ## 3. Token 预算口径
 
-- `START_HERE.md` + `HANDOFF.md` 合计控制在约 1000 token 量级（HANDOFF 硬上限默认 120 行，
-  由 archive_handoff.py 兜底）。
+- `START_HERE.md` + `HANDOFF.md` + `handoffs/INDEX.md` 合计控制在约 1000 token 量级；
+  `HANDOFF.md` 硬上限默认 120 行（由 archive_handoff.py 兜底），
+  `INDEX.md` 一行一条记录，记录数硬上限默认 200 条（超出把最旧的搬进 `archive/handoffs/`）。
+- `handoffs/` 单条记录保持“一屏以内”：它只服务“还原那一轮到底要做什么+结论”，过程细节不进去。
 - `code-index.md` 默认输出上限 1200 行（`--max-lines` 可调）；它只在需要定位代码时读，
   且读索引的开销远小于遍历同等文件数。
 - 单个 L2 文档保持“一屏到两屏”；变长就拆到 `decisions/` 或新文件，并在 START_HERE 登记。
@@ -63,6 +65,43 @@
 - 结构变动 → reindex；重大决策 → 补一条 ADR。
 - **失败路径分层**：本次临时坑写 HANDOFF 陷阱区；某个坑重复出现第二次，提升到 `lessons.md`（永久教训，不随 handoff 压缩丢失）。新 AI 动手前先查 lessons.md。
 
+#### 3.1 每轮对话压缩规范（`handoffs/`）
+
+上下文一长就失忆，根因是“压缩”没有落到文件、也没有格式。本协议把压缩定义为**每轮对话结束必须追加一条独立记录**：
+
+```text
+1. 时间戳        ISO 8601 带时区，例 2026-10-12T16:20:33+08:00
+2. Agent-会话Id  哪个 Agent、哪个会话产生的，例 claude-code / a1b2c3d4
+3. 用户原话      用户这一轮的完整原始需求，一字不删、不改写、不概括
+4. 本轮压缩      Done / Next / Verify / Risks 任意组合（可缺省，至少一段）
+```
+
+| 段 | 内容 |
+|---|---|
+| `Done` | 已经做了什么，具体到可验证结果（改了哪个文件、跑到什么状态） |
+| `Next` | 下一步做什么，按依赖排序，`- [ ]` 形式，完成即勾选 |
+| `Verify` | 要跑什么测试 / 命令证明 Done 成立 |
+| `Risks` | 有什么坑：试过且走不通的路、容易踩的雷、要避开的事项 |
+
+**为什么不是全写进 `HANDOFF.md`**：单文件既会无限膨胀（token 预算失控），又会因并行 Agent 互相覆盖而丢记录。
+`handoffs/` 一条记录一个文件（文件名 `<时间戳>-<Agent>-<会话Id>.md`，只增不改），
+`INDEX.md` 一行一条汇总（含 Agent / 会话 / 开放 Next 计数），任何新会话读一个索引即可定位，
+需要完整上下文时再按文件名读那一条。`HANDOFF.md` 仍保留为**当前状态总览**，每轮把最新结论并进去，
+两者不复制内容，只做汇总。
+
+**并发安全**：记录各自独立成文件，写方永不覆盖他人；`INDEX.md` 用“临时文件 + 原子替换”重建并加文件锁，
+同秒同 Agent 同会话的第二次写入自动加序号。多 Agent 并行写同一项目不会丢记录。
+
+**落地路径**：主控环境跑 `scripts/log_handoff.py`（`--user-file` 保原话完整，`--agent`/`--session` 显式指定身份）；
+无 Python 环境照 `.ai-dev/handoffs/0000-template.md` 手工写文件并在 `INDEX.md` 补一行。
+
+#### 3.2 多 Agent 协作约定
+
+- 各写各的文件；先读 `INDEX.md` 的「开放 Next」列再动手，避免撞车。
+- 接手别人的活：先读那条记录，再在自己记录里写明“接手自 <文件名>”。
+- `HANDOFF.md` 是唯一共享黑板，冲突时以代码现状为准，并把冲突写进自己那条的 `Risks`。
+- 一个会话一个 Id：同会话内复用，换会话必须换 Id，否则无法区分是谁写的。
+
 ### reindex — 增删/移动文件或模块后
 运行 `scripts/build_index.py`；架构层面的变化同时改 architecture.md，
 索引噪音（生成物、构建目录）写进 `.ai-dev/ignore.conf`。
@@ -76,12 +115,16 @@ ADR 只记“为什么”，实现细节归代码与架构文档。
 - **doctor 体检**：`scripts/doctor.py [--fix]` 自动发现六类腐化——必备文件缺失、L2 还是空模板、
   code-index 比源码旧（按 mtime）、HANDOFF 超限、指针缺失/漂移、`.ai-dev` 被 git 误忽略；
   退出码 0/1/2 对应健康/警告/错误。init 收尾、用户问“正常吗/检查下”、里程碑节点都跑一次。
-- **每次 handoff 顺手检查**：HANDOFF 是否超 120 行（超了归档）、下一步是否仍可执行。
+- **每次 handoff 顺手检查**：HANDOFF 是否超 120 行（超了归档）、下一步是否仍可执行、
+  `handoffs/INDEX.md` 与磁盘记录数是否一致、HANDOFF.md 是否落后于最新一条记录。
 - **里程碑节点**：doctor 全量体检，校对版本/命令、architecture 模块表与 code-index 一致。
 - **指针漂移**：工具升级后私有规则被改写，重跑 sync_rules.py；CI 用 `--check` 拦截。
 - **单一事实源巡检**：发现同一规则出现在两个文件，立即合并并在原处留路径引用。
 - 归档只搬 `<!-- ARCHIVE-LINE -->` 以下的历史区，脚本绝不触碰活跃状态；
   若活跃区本身超限，只能由 AI 手工压缩，脚本会明确拒绝代删。
+- **对话流水腐化**：`doctor.py` 专项检查 `handoffs/`——索引与磁盘漂移（自动重建）、
+  记录缺 `devctx-handoff` 标记 / 缺用户原话 / 无 Done/Next/Verify/Risks 任一节（定位到具体文件名）、
+  记录数超 200 条（自动归档最旧的）、HANDOFF.md 落后于流水（提示滚动更新）。
 
 ## 5.5 主控 / 协作分工与自包含约束
 
@@ -121,3 +164,7 @@ speckit（[github/spec-kit](https://github.com/github/spec-kit)，GitHub 官方 
 - init 跑完脚本就交差，把空模板 L2 留给用户自己填。
 - 让用户手动敲脚本路径/命令，或因机器没有 Python 就要求用户安装（应走无脚本降级）。
 - 在项目文件里写死只有主控环境才有的脚本路径，导致协作 IDE 无法照做。
+- **把每轮对话的压缩堆进单个 HANDOFF.md**（会无限膨胀）或**多个 Agent 抢写同一个文件**（互相覆盖丢记录）；
+  每轮必须写独立的 `handoffs/<时间戳>-<Agent>-<会话Id>.md`。
+- **压缩时概括、改写用户原话**——它是换 Agent 后还原需求的唯一依据，必须一字不删。
+- 写完记录不更新 `INDEX.md`，或不读索引就动手（看不到别人还欠的活，必然撞车）。
