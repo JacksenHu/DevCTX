@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -22,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
+TEMPLATES = ROOT / "assets" / "templates"
 sys.path.insert(0, str(SCRIPTS))
 
 import log_handoff  # noqa: E402
@@ -29,6 +31,7 @@ import archive_handoff  # noqa: E402
 import build_index  # noqa: E402
 import doctor  # noqa: E402
 import init_project  # noqa: E402
+import doc_registry  # noqa: E402
 import sync_rules  # noqa: E402
 from _common import match_ignore  # noqa: E402
 
@@ -55,11 +58,13 @@ class ProjectFixture(unittest.TestCase):
     def write_record(self, user: str, agent: str, session: str,
                      done: str | None = None, nxt: str | None = None,
                      verify: str | None = None, risks: str | None = None,
+                     intent: str | None = None,
                      model: str | None = None) -> Path:
         before = set((self.ai / "handoffs").glob("*.md"))
         path, sid = log_handoff.write_record(
             self.tmp, agent, session, user,
-            log_handoff.build_body(done, nxt, verify, risks, None, None, False),
+            log_handoff.build_body(done, nxt, verify, risks, intent,
+                                   None, None, False),
             model,
         )
         self.assertTrue(path.is_file())
@@ -122,9 +127,9 @@ class TestCompressionSpec(ProjectFixture):
 
         # 一节都没有 -> 规范校验必须拒绝
         with self.assertRaises(SystemExit):
-            log_handoff.build_body(None, None, None, None, None, None, False)
+            log_handoff.build_body(None, None, None, None, None, None, None, False)
         # --force 才允许自由格式
-        body = log_handoff.build_body(None, None, None, None, "随手记一笔", None, True)
+        body = log_handoff.build_body(None, None, None, None, None, "随手记一笔", None, True)
         self.assertIn("随手记一笔", body)
 
     def test_open_next_is_counted(self):
@@ -399,6 +404,284 @@ class TestSyncRules(ProjectFixture):
         # 幂等：再跑一次不重复注入
         sync_rules.sync(self.tmp, mode="detected", inject=True)
         self.assertEqual(text, target.read_text(encoding="utf-8"))
+
+
+# ============================================================ 文档治理 + 需求受理
+#
+# 这一组测试守的是"防漂移"契约：
+#   - 一个需求只对应一份文档，用户插话/追加/更正必须落到同一份文档上
+#   - 动手前的 intake 裁定有证据、有优先级，不能把"改需求"判成"新功能"
+#   - 裁定结论写进 handoff 的 ### Intent，换 Agent 后能读回来
+
+def _make_doc(root: Path, name: str, topic: str, status: str = "active",
+              source: str = "NEW（2026-10-12 首次提出）") -> Path:
+    """照模板造一份合规文档（不经过 --add，模拟 AI 手工创建）。"""
+    tpl = (TEMPLATES / "doc-template.md").read_text(encoding="utf-8")
+    p = root / ".ai-dev" / "docs" / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(tpl, encoding="utf-8")
+    doc_registry.cmd_add(root, f".ai-dev/docs/{name}", topic, source, status)
+    return p
+
+
+class TestDocRegistry(unittest.TestCase):
+    """DOCS.md 是唯一登记口：不登记就存在 = 错误级问题。"""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="devctx-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        (self.tmp / ".git").mkdir()
+        rc = init_project.init(self.tmp, "detected", False)
+        self.assertEqual(rc, 0)
+
+    def run_script(self, name: str, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / name), str(self.tmp), *args],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+
+    def test_init_lays_down_template_and_index(self) -> None:
+        docs = self.tmp / ".ai-dev" / "docs"
+        self.assertTrue((docs / "0000-template.md").is_file())
+        idx = docs / "DOCS.md"
+        self.assertTrue(idx.is_file())
+        text = idx.read_text(encoding="utf-8")
+        self.assertIn("devctx-docs: index", text)
+        self.assertIn("一个需求只对应一份文档", text)
+
+    def test_add_registers_topic_and_source(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        idx = (self.tmp / ".ai-dev" / "docs" / "DOCS.md").read_text(encoding="utf-8")
+        self.assertIn("auth-sms-login.md", idx)
+        self.assertIn("短信验证码登录", idx)
+        doc = (self.tmp / ".ai-dev" / "docs" / "auth-sms-login.md").read_text(encoding="utf-8")
+        self.assertIn("| 主题 | 短信验证码登录 |", doc)
+        self.assertIn("| 状态 | active |", doc)
+
+    def test_unregistered_doc_is_flagged(self) -> None:
+        # AI 绕过 DOCS.md 直接落盘的文档，check 必须抓到
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        rogue = self.tmp / ".ai-dev" / "docs" / "rogue.md"
+        rogue.write_text("# 私自建的文档\n", encoding="utf-8")
+        r = self.run_script("doc_registry.py", "--check")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("rogue.md", r.stdout)
+        self.assertIn("未登记", r.stdout)
+
+    def test_duplicate_topic_is_flagged(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        _make_doc(self.tmp, "login-sms.md", "短信验证码登录")
+        r = self.run_script("doc_registry.py", "--check")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("主题重复", r.stdout)
+
+    def test_find_hits_and_misses(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        r = self.run_script("doc_registry.py", "--find", "验证码")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("auth-sms-login.md", r.stdout)
+        r = self.run_script("doc_registry.py", "--find", "支付退款")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("没有文档命中", r.stdout)
+
+    def test_archive_moves_doc_and_rebuilds(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        r = self.run_script("doc_registry.py", "--archive", ".ai-dev/docs/auth-sms-login.md")
+        self.assertEqual(r.returncode, 0)
+        self.assertFalse((self.tmp / ".ai-dev" / "docs" / "auth-sms-login.md").exists())
+        moved = list((self.tmp / ".ai-dev" / "archive" / "docs").glob("auth-sms-login-*.md"))
+        self.assertEqual(len(moved), 1)
+        self.assertIn("archived", moved[0].read_text(encoding="utf-8"))
+
+    def test_rebuild_repairs_index_drift(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        idx = self.tmp / ".ai-dev" / "docs" / "DOCS.md"
+        idx.write_text("<!-- devctx-docs: index -->\n# 被手改坏的索引\n", encoding="utf-8")
+        r = self.run_script("doc_registry.py", "--check")
+        self.assertEqual(r.returncode, 2)
+        r = self.run_script("doc_registry.py", "--rebuild")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("auth-sms-login.md", idx.read_text(encoding="utf-8"))
+        r = self.run_script("doc_registry.py", "--check")
+        self.assertEqual(r.returncode, 0)
+
+    def test_index_counts_linking_records(self) -> None:
+        # 回归：rebuild_index 必须自己算关联记录数，
+        # 否则调用方预设的 links 被二次 scan 丢弃，索引永远显示 0
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录")
+        log_handoff.write_record(
+            self.tmp, "claude-code", "s1", "短信验证码登录收不到验证码",
+            log_handoff.build_body("查了网关", None, None, None,
+                                   "EXTEND → docs/auth-sms-login.md",
+                                   None, None, False),
+            None,
+        )
+        n, idx = doc_registry.rebuild_index(self.tmp / ".ai-dev" / "docs")
+        self.assertEqual(n, 1)
+        row = [ln for ln in idx.read_text(encoding="utf-8").splitlines()
+               if "auth-sms-login.md" in ln][0]
+        self.assertTrue(row.rstrip().endswith("| 1 |"), row)
+
+    def test_doctor_flags_missing_topic_or_source(self) -> None:
+        bad = self.tmp / ".ai-dev" / "docs" / "bad.md"
+        bad.write_text("<!-- devctx-docs: doc -->\n# 没有字段表的文档\n", encoding="utf-8")
+        doc_registry.cmd_add(self.tmp, ".ai-dev/docs/bad.md", "坏文档", "NEW（测试）", "active")
+        # cmd_add 会把字段补上；再造一份连标记都没有的
+        worse = self.tmp / ".ai-dev" / "docs" / "worse.md"
+        worse.write_text("# 什么都没有\n", encoding="utf-8")
+        doc_registry.rebuild_index(self.tmp / ".ai-dev" / "docs")
+        d = doc_registry.parse_doc(worse)
+        self.assertTrue(d.malformed)
+
+
+class TestIntake(unittest.TestCase):
+    """受理裁定的证据与优先级：改需求绝不能判成新功能。"""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="devctx-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        (self.tmp / ".git").mkdir()
+        (self.tmp / "src").mkdir()
+        rc = init_project.init(self.tmp, "detected", False)
+        self.assertEqual(rc, 0)
+
+    def run_intake(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / "doc_registry.py"), str(self.tmp),
+             "--intake", *args],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+
+    def write_record(self, user: str, nxt: str | None = None,
+                     agent: str = "claude-code", session: str = "s1") -> None:
+        log_handoff.write_record(
+            self.tmp, agent, session, user,
+            log_handoff.build_body("做了一半", nxt, None, None, None, None, None, False),
+            None,
+        )
+
+    def test_brand_new_topic_is_new(self) -> None:
+        r = self.run_intake("--user", "帮我导出一份 CSV 报表")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("建议判定：**NEW**", r.stdout)
+        self.assertIn("三类证据均未覆盖", r.stdout)
+
+    def test_active_doc_is_extend(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录", "active")
+        r = self.run_intake("--user", "短信验证码登录收不到验证码，看看是不是网关的问题")
+        self.assertIn("建议判定：**EXTEND**", r.stdout)
+        self.assertIn("docs/auth-sms-login.md", r.stdout)
+        self.assertIn("改它，禁止新建", r.stdout)
+
+    def test_interruption_extends_same_doc_never_new(self) -> None:
+        # 用户做到一半插话/追加：仍然落回同一份文档，绝不开第二份
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录", "active")
+        self.write_record("短信验证码登录做了一半", nxt="- [ ] 补验证码频率限制")
+        r = self.run_intake("--user", "验证码登录先别用手机号了，改用邮箱")
+        self.assertIn("建议判定：**EXTEND**", r.stdout)
+        self.assertIn("docs/auth-sms-login.md", r.stdout)
+        self.assertNotIn("NEW", r.stdout.split("含义")[0].replace("建议判定：**EXTEND**", ""))
+
+    def test_stable_doc_change_is_extend(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录", "stable")
+        r = self.run_intake("--user", "短信验证码登录要加图形验证码防刷")
+        self.assertIn("建议判定：**EXTEND**", r.stdout)
+        self.assertIn("状态改回 active", r.stdout)
+
+    def test_open_next_without_doc_is_continue(self) -> None:
+        self.write_record("短信验证码登录做了一半", nxt="- [ ] 补频率限制")
+        r = self.run_intake("--user", "接着把短信验证码登录的收尾工作做完")
+        self.assertIn("建议判定：**CONTINUE**", r.stdout)
+        self.assertIn("补一份文档", r.stdout)
+
+    def test_unrelated_utterance_is_not_continue(self) -> None:
+        # 防误判：有开放 Next 讲登录，用户说导出报表 -> 仍是 NEW
+        self.write_record("短信验证码登录做了一半", nxt="- [ ] 补频率限制")
+        r = self.run_intake("--user", "帮我导出一份 CSV 报表")
+        self.assertIn("建议判定：**NEW**", r.stdout)
+
+    def test_specs_tasks_continue(self) -> None:
+        specs = self.tmp / "specs" / "auth-sms-login" / "tasks.md"
+        specs.parent.mkdir(parents=True)
+        specs.write_text("# tasks\n- [x] 搭页面\n- [ ] 接网关\n", encoding="utf-8")
+        r = self.run_intake("--user", "短信验证码登录的网关还没接")
+        self.assertIn("建议判定：**CONTINUE**", r.stdout)
+        self.assertIn("tasks.md", r.stdout)
+
+    def test_active_doc_beats_open_record(self) -> None:
+        # 优先级：有 active 文档时必须落到文档，记录只是过程流水
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录", "active")
+        self.write_record("短信验证码登录做了一半", nxt="- [ ] 补频率限制")
+        r = self.run_intake("--user", "短信验证码登录再加个图形验证码")
+        self.assertIn("建议判定：**EXTEND**", r.stdout)
+        self.assertIn("docs/auth-sms-login.md", r.stdout)
+
+    def test_intake_prints_evidence(self) -> None:
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录", "active")
+        r = self.run_intake("--user", "短信验证码登录收不到验证码")
+        self.assertIn("[现有文档]", r.stdout)
+        self.assertIn("相关度", r.stdout)
+        self.assertIn("下一步（按顺序）", r.stdout)
+
+
+class TestIntentSection(unittest.TestCase):
+    """裁定结论必须写进 ### Intent，换 Agent 后读得回来。"""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="devctx-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        (self.tmp / ".git").mkdir()
+        (self.tmp / "src").mkdir()
+        rc = init_project.init(self.tmp, "detected", False)
+        self.assertEqual(rc, 0)
+
+    def test_intent_round_trips_through_scan(self) -> None:
+        path, _ = log_handoff.write_record(
+            self.tmp, "claude-code", "s1", "短信验证码登录收不到验证码",
+            log_handoff.build_body("查了网关", "- [ ] 补监控", None, None,
+                                   "EXTEND → docs/auth-sms-login.md", None, None, False),
+            None,
+        )
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("### Intent", text)
+        self.assertIn("EXTEND → docs/auth-sms-login.md", text)
+        entries = log_handoff.scan_entries(self.tmp / ".ai-dev" / "handoffs")
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].sections.get("Intent"),
+                         "EXTEND → docs/auth-sms-login.md")
+        self.assertEqual(entries[0].malformed, [])
+
+    def test_intent_only_record_is_malformed(self) -> None:
+        # 光有裁定没有压缩内容，不算有效记录——doctor 要能抓出来
+        path, _ = log_handoff.write_record(
+            self.tmp, "claude-code", "s1", "随便说一句",
+            log_handoff.build_body(None, None, None, None,
+                                   "NEW → docs/x.md", None, None, False),
+            None,
+        )
+        entries = log_handoff.scan_entries(self.tmp / ".ai-dev" / "handoffs")
+        self.assertEqual(len(entries), 1)
+        self.assertIn("无 Done/Next/Verify/Risks 任一节", entries[0].malformed)
+
+    def test_intake_verdict_lands_in_next_record(self) -> None:
+        # 端到端：受理 → 按裁定改同一份文档 → 记录带 Intent 指向该文档
+        _make_doc(self.tmp, "auth-sms-login.md", "短信验证码登录", "active")
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "doc_registry.py"), str(self.tmp),
+             "--intake", "--user", "短信验证码登录再加图形验证码"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        self.assertIn("docs/auth-sms-login.md", r.stdout)
+        path, _ = log_handoff.write_record(
+            self.tmp, "claude-code", "s2", "短信验证码登录再加图形验证码",
+            log_handoff.build_body("在需求变更里追加了本次原话", None, "跑了 test_intake",
+                                   None, "EXTEND → docs/auth-sms-login.md",
+                                   None, None, False),
+            None,
+        )
+        links = doc_registry.count_links(self.tmp, "auth-sms-login.md")
+        self.assertEqual(links, 1)
+
 
 
 if __name__ == "__main__":

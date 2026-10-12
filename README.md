@@ -24,6 +24,8 @@
 | 规则重复 | 每个工具各维护一套规则，改一次要同步 N 份 | 单一事实源 + 薄指针，规则只写一遍 |
 | 长对话重发 | 换模型要带上全部历史，越滚越大 | 每轮对话结束压缩成结构化 HANDOFF，只传状态不传过程 |
 | 探索弯路 | 新工具不知道之前试过什么不行 | HANDOFF 陷阱区 + `lessons.md` 永久教训，避免重蹈覆辙 |
+| 文档泛滥 | 每个需求新建一份文档，越堆越乱，Agent 分不清哪份算数 | 一个需求一份文档 + `DOCS.md` 登记索引，未登记即错误 |
+| 特性漂移 | 用户插话/追加被当成新需求重做，做出来不是用户要的 | 动手前 intake 四类证据裁定改还是建，结论写进 `Intent` 留痕 |
 
 ## 它不只是"跨 IDE"——6 个真实使用场景
 
@@ -47,7 +49,7 @@
 | L0 工具指针 | `AGENTS.md`、`CLAUDE.md`、`.cursor/rules/…`、`.trae/rules/…` 等 | 工具启动时自动读，仅十几行，指向 `.ai-dev/` |
 | L1 入口 | `.ai-dev/START_HERE.md` | **每个新会话必读** |
 | L2 长期记忆 | `project-brief / architecture / conventions / glossary / lessons / code-index` | 遇到对应问题才按需读 |
-| L3 工作记忆 | `HANDOFF.md`（当前状态总览）+ `handoffs/`（每轮对话压缩流水）+ `decisions/` | **每个新会话必读**，每轮对话结束自动追加 |
+| L3 工作记忆 | `HANDOFF.md`（当前状态总览）+ `handoffs/`（每轮对话压缩流水）+ `docs/`（需求文档，一个需求一份）+ `decisions/` | **每个新会话必读**，每轮对话结束自动追加 |
 
 新会话固定开销只有 L1 + L3（目标控制在约 1k token 量级），L2 与源码按需加载。相比让 AI 重扫整个仓库，省一个数量级以上。
 
@@ -87,6 +89,32 @@
 - `HANDOFF.md` 是唯一共享黑板，冲突时以代码现状为准，并把冲突写进自己那条的 `Risks`。
 
 > 上下文长到失忆时才想起交接，已经晚了——每轮都写，成本才是一条记录的几十行。
+
+## 文档治理 + 需求受理：治"文档泛滥与特性漂移"
+
+前两个问题（失忆、规则重复）治好后，第三个问题浮出来：**每个新需求都新建一份文档**，`docs/` 很快堆成小山，下一个 Agent 分不清哪份算数；更糟的是用户说到一半插话、输出完又追加要求，Agent 没察觉这是在改同一个需求，**另起一份文档重新做**——做出来的功能漂移，甚至根本不是用户要的。
+
+devctx 用两道闸门防住：
+
+**第一道：一个需求只对应一份文档。** 全部需求文档只放 `.ai-dev/docs/`，`DOCS.md` 是唯一登记索引。新建任何文档前必须先查 `DOCS.md`；能并进现有文档的，禁止新建。用户分几次说、中途插话、输出后追加、发现理解错了要更正——**统统是修改现有文档**，不是新建。严禁按对话轮次组织文档（`登录-第2次.md` 是反模式），只按主题组织（`auth-sms-login.md`）。
+
+**第二道：动手前先做需求受理（intake）。** 用户说话是随意的——功能可能已做完、做一半，或正在被改表述。Agent 不凭措辞猜，先跑 `doc_registry.py --intake`，拿四类证据裁定：
+
+| 证据 | 说明 |
+|---|---|
+| `handoffs/` 里未闭环的 `Next` | 最可能的"续做 / 更正"信号 |
+| `specs/*/tasks.md` 未完成任务 | Spec Kit 流程里的半成品 |
+| `docs/DOCS.md` 现有文档 | 需求的长期事实源 |
+| 代码地图 | 兜底对照 |
+
+裁定优先级：**active 文档 > 未闭环记录 > specs > 全新主题**。文档是需求的长期事实源，记录只是过程流水——有主文档就必须落到文档上，否则"改需求"会被当成"新任务"重新建一份文档，那就是特性漂移的起点。判定结论（`NEW` / `EXTEND` / `FIX` / `CONTINUE` / `CORRECTION`）写进本轮 handoff 记录的 `### Intent` 小节，下一个 Agent 读得到，不会重新立案。
+
+```text
+用户："短信验证码登录先别用手机号了，改用邮箱"     ← 做到一半插话
+intake → EXTEND → docs/auth-sms-login.md           ← 改同一份，禁止新建
+```
+
+`doctor` 把未登记文档（绕过 `DOCS.md` 直接落盘）列为**错误级**问题，`--check` 可直接进 CI。
 
 ## 安装（3 步，零配置）
 
@@ -131,11 +159,12 @@
 
 ## 日常工作流（AI 自动执行）
 
-- **init（每个项目一次）**：初始化 `.ai-dev/`（含 `handoffs/` 与其模板）、自动检测技术栈（Node/Python/Go/Rust + monorepo 子包 + .env 变量）、首份代码索引、工具指针，并由 AI 据实起草 L2 文档（project-brief / architecture / conventions / glossary；lessons 初始可空）。**自动 spec 化项目现状**：扫 TODO/FIXME/半成品，已完成的写 spec.md，未完成的完整跑 spec → plan → tasks。
+- **init（每个项目一次）**：初始化 `.ai-dev/`（含 `handoffs/`、`docs/` 与其模板）、自动检测技术栈（Node/Python/Go/Rust + monorepo 子包 + .env 变量）、首份代码索引、工具指针，并由 AI 据实起草 L2 文档（project-brief / architecture / conventions / glossary；lessons 初始可空）。**自动 spec 化项目现状**：扫 TODO/FIXME/半成品，已完成的写 spec.md，未完成的完整跑 spec → plan → tasks。
 - **resume（新会话自动）**：读 START_HERE + HANDOFF + `handoffs/INDEX.md`，沿"下一步"继续；动手前先查 lessons.md。
-- **handoff（每轮对话结束自动）**：往 `handoffs/` 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），并把最新结论滚动进 HANDOFF.md；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。
+- **intake（动手前自动，第零原则）**：用户提出需求后，先跑 `doc_registry.py --intake` 拿四类证据裁定改现有文档还是新建；文档一律进 `.ai-dev/docs/` 并登记进 `DOCS.md`，一个需求只对应一份文档。
+- **handoff（每轮对话结束自动）**：往 `handoffs/` 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks + Intent 受理结论），并把最新结论滚动进 HANDOFF.md；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。
 - **archive（记录超量自动）**：HANDOFF 超 120 行搬历史区，`handoffs/` 超 200 条搬最旧的进 `archive/handoffs/`，活跃窗口不动。
-- **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
+- **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）、**未登记文档 / 文档缺主题或来源 / 主题重复**等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
 
 ## 已覆盖的 AI 工具（12 种，可扩展）
 
@@ -147,17 +176,20 @@ AGENTS.md 通用兜底（Codex / Amp / Zed）、Claude Code、Cursor（新版 .m
 devctx/
 ├── SKILL.md                     # 唯一入口：AI 的操作手册（触发判断、自动动作链、降级路径）
 ├── scripts/                     # AI 调用的工具，用户无需运行
-│   ├── init_project.py          # 初始化 .ai-dev（含 handoffs/）+ 技术栈检测 + 首份索引 + 工具指针
+│   ├── init_project.py          # 初始化 .ai-dev（含 handoffs/ + docs/）+ 技术栈检测 + 首份索引 + 工具指针
 │   ├── log_handoff.py           # 每轮对话压缩记录：追加记录 + 重建 INDEX + 读最近记录（多 Agent 并发安全）
+│   ├── doc_registry.py          # 文档登记索引 DOCS.md + 需求受理 intake（防文档泛滥与特性漂移）
 │   ├── build_index.py           # 生成代码地图（尊重 .gitignore 与 ignore.conf）
 │   ├── sync_rules.py            # 生成/校验/注入各工具薄指针（幂等）
 │   ├── archive_handoff.py       # 安全归档超长 HANDOFF 历史与超量对话记录
-│   ├── doctor.py                # 健康体检 + --fix 自动修复（含 handoffs 腐化检查）
+│   ├── doctor.py                # 健康体检 + --fix 自动修复（含 handoffs / docs 腐化检查）
 │   └── _common.py               # 工具映射表、项目根探测、忽略匹配、Agent/会话识别
 ├── assets/templates/            # 初始化时复制进项目的自包含模板
 │   ├── START_HERE.md            # L1 入口
 │   ├── HANDOFF.md               # L3 工作记忆（当前状态总览）
 │   ├── handoff-entry.md         # 每轮对话压缩记录模板（复制为 handoffs/0000-template.md）
+│   ├── doc-template.md          # 需求文档模板（复制为 docs/0000-template.md，一个需求一份）
+│   ├── DOCS.md                  # 文档登记索引模板（复制为 docs/DOCS.md）
 │   ├── project-brief.md         # L2：项目定位/运行命令
 │   ├── architecture.md          # L2：模块分区/改什么去哪改
 │   ├── conventions.md           # L2：编码/命名/提交规范
@@ -175,8 +207,12 @@ devctx/
 ```bash
 python scripts/init_project.py <项目根> [--all] [--force]
 python scripts/log_handoff.py <项目根> --user-file user.txt --body-file body.md \
-    [--agent claude-code --session a1b2c3d4] [--model sonnet]
+    [--agent claude-code --session a1b2c3d4] [--model sonnet] [--intent "EXTEND → docs/auth.md"]
 python scripts/log_handoff.py <项目根> --list | --tail 3 [--agent cursor] | --template | --rebuild-index
+python scripts/doc_registry.py <项目根> --intake --user-file user.txt     # 需求受理：改现有文档还是新建
+python scripts/doc_registry.py <项目根> --find 登录 | --list | --rebuild | --check | --init
+python scripts/doc_registry.py <项目根> --add docs/auth-sms-login.md --topic "短信验证码登录" \
+    --source "NEW 2026-10-12" [--status active] | --archive docs/old.md
 python scripts/build_index.py  <项目根> [--max-lines 1200] [--max-depth 4]
 python scripts/sync_rules.py   <项目根> [--all] [--inject] [--check]
 python scripts/archive_handoff.py <项目根> [--max-lines 120] [--max-entries 200] [--entries-only]
@@ -197,6 +233,7 @@ python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 �
 7. **统一语言**：业务术语只在 `glossary.md` 定义一次，所有文档和代码命名引用它，跨工具说同一种话、省 token。
 8. **失败分层**：临时坑写 HANDOFF（易失），重复踩第二次提升到 lessons.md（持久），AI 不重复交学费。
 9. **每轮压缩**：每轮对话结束都写 HANDOFF，不等大任务完成，支持多会话并发和换 agent。
+10. **一个需求一份文档**：文档按主题组织、登记进 `DOCS.md`；用户插话/追加/更正都是改现有文档，动手前先做需求受理，严禁按对话轮次新建。
 
 ## 与 speckit / Spec Kit 规格驱动开发（SDD）联动
 

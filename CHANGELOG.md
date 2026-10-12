@@ -5,7 +5,25 @@
 ## [Unreleased]
 
 ### Added
-- **每轮对话压缩规范（`.ai-dev/handoffs/`）**：治"上下文一长就失忆"——压缩从此落到文件且有格式
+- **文档治理与需求受理（`.ai-dev/docs/` + `scripts/doc_registry.py`）**：治“文档泛滥与特性漂移”
+  - **一个需求只对应一份文档**：需求文档只放 `.ai-dev/docs/`，`DOCS.md` 是唯一登记索引；
+    新建前必须先查索引，能并进现有文档的禁止新建；按主题命名，严禁按对话轮次命名（反模式）
+  - **intake 需求受理**：动手前跑 `--intake`，拿四类证据（handoffs 未闭环 `Next`、specs 未完成任务、
+    DOCS.md 现有文档、代码地图）裁定 `NEW` / `EXTEND` / `FIX` / `CONTINUE` / `CORRECTION`；
+    优先级 active 文档 > 未闭环记录 > specs > 全新主题——有主文档就必须落到文档上，
+    否则“改需求”会被当成“新任务”重新建文档，即特性漂移的起点
+  - **裁定留痕**：handoff 记录新增 `### Intent` 小节写受理结论（例 `EXTEND → docs/auth-sms-login.md`），
+    `parse_entry` 支持回读；光有 Intent 没有 Done/Next/Verify/Risks 的记录判不合规
+  - `doc_registry.py` 全套命令：`--intake` / `--find` / `--add` / `--archive` / `--list` /
+    `--rebuild` / `--check` / `--init`；`--check` 检出未登记文档（错误级）、缺主题/缺来源、
+    主题重复、无记录引用
+  - 新增 `assets/templates/doc-template.md`（需求文档模板，含需求原文/需求变更/当前结论/已废弃/待办）
+    与 `assets/templates/DOCS.md`（登记索引模板）；`init_project.py` 初始化时一并铺好
+- `doctor.py` 新增 docs 专项腐化检查：未登记文档（`--fix` 可自愈）、缺主题或缺来源需求、
+  主题重复、无 handoff 记录引用
+- 新增 `tests/` 覆盖文档登记、intake 六场景裁定（新功能/插话/追加/stable 改需求/续做/无关需求）、
+  Intent 回读、索引关联记录数回归
+- **每轮对话压缩规范（`.ai-dev/handoffs/`）**：治“上下文一长就失忆”——压缩从此落到文件且有格式
   - 每条记录固定四部分：时间戳（ISO 8601 带时区）+ Agent-会话Id + 用户原话（完整，一字不删）
     + 本轮压缩 `Done` / `Next` / `Verify` / `Risks`（四者可缺省、任意组合，至少一段）
   - 一条记录一个文件 `<时间戳>-<Agent>-<会话Id>.md`，**只增不改**；`INDEX.md` 一行一条自动汇总，
@@ -26,17 +44,25 @@
 ### Fixed
 - **`doctor.py` 语法错误**（`scripts/doctor.py:69` 多余右括号）导致整个脚本无法运行——
   而 init 收尾、`--fix` 自愈、CI `--check` 全都依赖它
+- `doc_registry.rebuild_index` 内部二次 `scan_docs()` 丢弃调用方预设的 `links`，
+  导致 `DOCS.md`「关联记录数」永远显示 0；改为在 `rebuild_index` 内统一计算
+- `parse_entry` 的 `_SECTION_RE` 不含 `Intent`，受理结论写进记录后读不回来，闭环断裂；
+  补入正则，同时把“无压缩节”判定收紧为 Done/Next/Verify/Risks 四节至少一节
 - `match_ignore` 未实现 `ignore.conf` 文档承诺的 `**` 任意层级通配与 `/` 根锚定，
-  导致 `**/foo`、`/build` 等规则静默失效；改为 glob→正则转换，并保持"后者覆盖前者"的取反语义
-- `init_project.py` 命令检测从不产出 `install` / `run` 键，模板里这两项永远显示"待确认"
+  导致 `**/foo`、`/build` 等规则静默失效；改为 glob→正则转换，并保持“后者覆盖前者”的取反语义
+- `init_project.py` 命令检测从不产出 `install` / `run` 键，模板里这两项永远显示“待确认”
 
 ### Changed
-- `SKILL.md` / `README.md` / `references/context-protocol.md` 全面写入压缩规范与多 Agent 协作协议；
-  handoff 触发条件从"任务闭环/收工"改为**每轮对话结束**
-- `START_HERE.md` schema 升级到 `v2`：文件地图登记 `handoffs/`，新增 §3 收工协议（压缩规范）、
-  §4 多 Agent 协作约定；`HANDOFF.md` 元信息新增"最近一轮对话记录"字段
-- `_common.py` 的 `POINTER_BODY` 增加两句：新会话读 `handoffs/INDEX.md`、每轮结束追加压缩记录
-- `HANDOFF.md` 与 `handoffs/` 分工明确：前者是当前状态总览（滚动更新），后者是每轮原始流水（只增不改）
+- `SKILL.md` / `README.md` / `references/context-protocol.md` 全面写入压缩规范、多 Agent 协作协议、
+  文档治理与需求受理；handoff 触发条件从"任务闭环/收工"改为**每轮对话结束**，
+  intake 成为**动手前的第零原则**
+- `START_HERE.md` schema 升级到 `v2`：文件地图登记 `handoffs/` 与 `docs/`，新增 §1.5 需求受理、
+  §3 收工协议（压缩规范）、§4 多 Agent 协作约定（含"一个需求一份文档"）；
+  `HANDOFF.md` 元信息新增"最近一轮对话记录"字段
+- `_common.py` 的 `POINTER_BODY` 增加三句：新会话读 `handoffs/INDEX.md`、每轮结束追加压缩记录、
+  动手前先查 `docs/DOCS.md` 做需求受理
+- `HANDOFF.md` 与 `handoffs/` 分工明确：前者是当前状态总览（滚动更新），后者是每轮原始流水（只增不改）；
+  `docs/` 只记"需求定成什么样"，过程归流水、状态归 HANDOFF
 
 ## [0.4.1] - 2026-09-30
 

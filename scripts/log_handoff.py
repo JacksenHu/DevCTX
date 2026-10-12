@@ -112,7 +112,7 @@ class Entry:
         return one[:60] + ("…" if len(one) > 60 else "")
 
 
-_SECTION_RE = re.compile(r"^###\s+(Done|Next|Verify|Risks)\s*$", re.M)
+_SECTION_RE = re.compile(r"^###\s+(Done|Next|Verify|Risks|Intent)\s*$", re.M)
 _FIELD_RE = {
     "ts": re.compile(r"^\|\s*时间戳\s*\|\s*(.+?)\s*\|\s*$", re.M),
     "agent": re.compile(r"^\|\s*Agent\s*\|\s*(.+?)\s*\|\s*$", re.M),
@@ -165,7 +165,8 @@ def parse_entry(path: Path) -> Entry:
         e.malformed.append("缺 devctx-handoff 标记")
     if not e.user_text:
         e.malformed.append("缺用户原话")
-    if not e.sections:
+    # Intent 是受理裁定的回读位，不算压缩节本身：四节至少有一节才算有效记录
+    if not any(k in e.sections for k in ("Done", "Next", "Verify", "Risks")):
         e.malformed.append("无 Done/Next/Verify/Risks 任一节")
     return e
 
@@ -295,11 +296,12 @@ def quote_user(text: str) -> str:
 
 
 def build_body(done: str | None, nxt: str | None, verify: str | None,
-               risks: str | None, body: str | None, body_file: Path | None,
+               risks: str | None, intent: str | None,
+               body: str | None, body_file: Path | None,
                force: bool) -> str:
     """Assemble the '本轮压缩' section from flags or a full body."""
     parts: list[str] = []
-    for name, val in zip(SECTIONS, (done, nxt, verify, risks)):
+    for name, val in zip(SECTIONS, (done, nxt, verify, risks, intent)):
         if val and val.strip():
             parts.append(f"### {name}\n{val.strip()}\n")
     if body_file:
@@ -431,6 +433,9 @@ def main() -> int:
     ap.add_argument("--next", dest="nxt", help="Next：下一步做什么")
     ap.add_argument("--verify", help="Verify：要跑什么测试")
     ap.add_argument("--risks", help="Risks：有什么坑")
+    ap.add_argument("--intent", dest="intent",
+                    help="Intent：需求受理裁定结论，例 \"EXTEND → docs/auth-jwt.md"
+                         "（用户中途插话，续上一条）\"；涉及改/建文档时必须写")
     ap.add_argument("--body", help="本轮压缩正文（含 ### Done 等标题）")
     ap.add_argument("--body-file", help="本轮压缩正文文件")
     ap.add_argument("--force", action="store_true", help="允许没有标准小节标题的自由格式")
@@ -472,7 +477,7 @@ def main() -> int:
                  "压缩规范要求每条记录都带完整需求。")
 
     body_file = Path(args.body_file) if args.body_file else None
-    body = build_body(args.done, args.nxt, args.verify, args.risks,
+    body = build_body(args.done, args.nxt, args.verify, args.risks, args.intent,
                       args.body, body_file, args.force)
 
     agent = detect_agent(root, args.agent)

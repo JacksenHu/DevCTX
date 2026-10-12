@@ -19,6 +19,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (  # noqa: E402
     AI_DEV_DIR,
+    DOCS_DIR,
+    DOC_INDEX_NAME,
+    DOC_TEMPLATE_NAME,
     HANDOFFS_DIR,
     INDEX_NAME,
     ENTRY_TEMPLATE_NAME,
@@ -28,6 +31,7 @@ from _common import (  # noqa: E402
 )
 import sync_rules  # noqa: E402
 import log_handoff  # noqa: E402
+import doc_registry  # noqa: E402
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = SKILL_ROOT / "assets" / "templates"
@@ -266,6 +270,13 @@ def init(root: Path, mode: str, force: bool) -> int:
         write_text(entry_tpl, read_text(TEMPLATES / "handoff-entry.md"))
         print(f"[+] created {AI_DEV_DIR}/{HANDOFFS_DIR}/{ENTRY_TEMPLATE_NAME}")
 
+    docs = ai / DOCS_DIR
+    docs.mkdir(exist_ok=True)
+    doc_tpl = docs / DOC_TEMPLATE_NAME
+    if not doc_tpl.exists() and (TEMPLATES / "doc-template.md").is_file():
+        write_text(doc_tpl, read_text(TEMPLATES / "doc-template.md"))
+        print(f"[+] created {AI_DEV_DIR}/{DOCS_DIR}/{DOC_TEMPLATE_NAME}")
+
     today = _dt.date.today().isoformat()
     for src_name, dest_rel in COPY_MAP.items():
         src = TEMPLATES / src_name
@@ -283,6 +294,7 @@ def init(root: Path, mode: str, force: bool) -> int:
 
     n, _ = log_handoff.rebuild_index(handoffs)
     print(f"[+] created {AI_DEV_DIR}/{HANDOFFS_DIR}/{INDEX_NAME}（{n} 条）")
+    doc_registry.cmd_init(root)
 
     r = subprocess.run(
         [sys.executable, str(Path(__file__).parent / "build_index.py"), str(root)],
@@ -311,7 +323,10 @@ def init(root: Path, mode: str, force: bool) -> int:
         "（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），"
         f"运行 {HERE_NAME}/log_handoff.py 或按 {ENTRY_TEMPLATE_NAME} 手工写；"
         "这是多会话并发、换 Agent 不丢上下文的关键，不等大任务完成。\n"
-        "6. 用户无需手动运行任何脚本；其他 IDE 新开会话即由指针自动引导到 START_HERE.md。"
+        f"6. **动手前先做需求受理**：跑 {HERE_NAME}/doc_registry.py <根> --intake --user-file <原话>，"
+        f"按证据判定改现有文档还是新建；文档一律进 {AI_DEV_DIR}/{DOCS_DIR}/ 并登记进 {DOC_INDEX_NAME}，"
+        "**一个需求只对应一份文档**，用户插话/追加/更正都是改现有文档，严禁按对话轮次新建。\n"
+        "7. 用户无需手动运行任何脚本；其他 IDE 新开会话即由指针自动引导到 START_HERE.md。"
     )
     return 0
 

@@ -12,14 +12,17 @@ from pathlib import Path
 
 AI_DEV_DIR = ".ai-dev"
 HANDOFFS_DIR = "handoffs"
+DOCS_DIR = "docs"
 INDEX_NAME = "INDEX.md"
+DOC_INDEX_NAME = "DOCS.md"
+DOC_TEMPLATE_NAME = "0000-template.md"
 ENTRY_TEMPLATE_NAME = "0000-template.md"
 MARKER = "devctx:pointer"
 BEGIN_BLOCK = "devctx:begin"
 END_BLOCK = "devctx:end"
 SCHEMA_VERSION = "v2"
 ENTRY_MARKER = "devctx-handoff"
-SECTIONS = ("Done", "Next", "Verify", "Risks")
+SECTIONS = ("Done", "Next", "Verify", "Risks", "Intent")
 
 POINTER_BODY = """# 统一上下文入口（由 devctx 自动生成，请勿在此编写项目规则）
 
@@ -28,6 +31,9 @@ POINTER_BODY = """# 统一上下文入口（由 devctx 自动生成，请勿在�
 - 接到任务 / 新会话开始：自动读 `.ai-dev/START_HERE.md`、`.ai-dev/HANDOFF.md`
   与 `.ai-dev/handoffs/INDEX.md`（每轮对话压缩流水索引），沿 HANDOFF「下一步动作」继续；
   用一两句话说明你理解的现状即可，不打断用户；发现文档与代码矛盾时以代码为准并回写。
+- **动手前先做需求受理**：先查 `.ai-dev/docs/DOCS.md`（文档索引）与 handoffs 未闭环项，
+  判定本次是"改现有文档"还是"真的新建"。**一个需求只对应一份文档**，
+  用户插话/追加/更正都是改现有文档，严禁按对话轮次新建文档。
 - **每轮对话结束（你输出回复之后）**：自动往 `.ai-dev/handoffs/` 追加一条压缩记录
   （时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），并同步更新 `HANDOFF.md`。
 - 动手改代码前：先查 `.ai-dev/code-index.md` 定位，并遵守 `.ai-dev/conventions.md`。

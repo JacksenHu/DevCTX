@@ -12,6 +12,29 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 - 用户机器没有 Python 时**不得**把"请先安装 Python"甩给用户：走本文「无 Python 降级路径」，用你的文件工具等价落地。
 - **主控 / 协作分工**：只有运行本技能的"主控 AI"需要脚本；其他 IDE 里的 AI 不装本技能，它们靠项目内自包含的 `.ai-dev/` 与指针文件即可运转，因此生成的每份文件都必须不依赖本技能存在。
 
+## 第零原则：先受理，再动手（防特性漂移）
+
+**用户说的话是随意的，不能直接当需求。** 同一个功能可能已经做完、做一半、或正在被改写；
+用户会中途插话、会在你输出完之后又补要求。此时若照着字面新开一份文档/任务，做出来的东西就会漂移，
+甚至根本不是用户要的。因此**动手前必须先做需求受理**：
+
+```text
+用户随口一句话 ──▶ 受理裁定（查证据，不猜）──▶ EXTEND / NEW / CONTINUE / FIX / CORRECTION
+                          │
+                          ├─ handoffs/INDEX.md 的「开放 Next」  有没有人正在做这件事
+                          ├─ specs/*/tasks.md 未闭环项          有没有排着没做完的任务
+                          ├─ docs/DOCS.md 文档索引              这个需求有没有主文档
+                          └─ code-index.md                     代码里是不是已经有了
+```
+
+**裁定优先级**：有 `active` 主文档 → `EXTEND`（改文档，禁止新建）；没有文档但有未闭环记录 →
+`CONTINUE`（接着做，并补一份文档把需求定下来）；三类证据都没有 → `NEW`（才允许新建）。
+裁定结论**必须写进本轮 handoff 记录的 `### Intent` 小节**，否则下一个 Agent 会重新裁定、
+重新建一份文档，漂移从此开始。
+
+**文档纪律**：一个需求只对应一份文档，按主题组织，**严禁按对话轮次组织**。
+用户插话 / 追加 / 更正 / 否定刚才的做法 → 全部是**修改现有文档**，不是新建。
+
 ## 核心模型
 
 切换工具/模型之所以贵，是因为项目认知只存在易失的对话历史里。本技能把它**外置为项目内一套文件**：
@@ -27,13 +50,15 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 | 用户情形 | 动作 | 触发方式 |
 |---|---|---|
 | 项目没有 `.ai-dev/`，或用户要"多 IDE 统一/接入规范/无缝切换" | **init 全链** | 用户意图 |
+| **接到任何需求 / 要写任何文档之前** | **intake 需求受理**（见「第零原则」） | **AI 自动，最先做** |
 | 新会话、换 IDE/模型、"接着上次做" | **resume** | AI 自动 |
 | **每轮对话结束（你输出回复之后）** | **handoff**：往 `handoffs/` 追加一条压缩记录 + 滚动更新 HANDOFF.md | AI 自动 |
+| 用户中途插话 / 输出后又提要求 / 否定刚才的做法 | **intake 重裁** → 并进**同一份**需求文档，绝不新建 | AI 自动 |
 | 增删/移动源码文件或模块 | **reindex**（必要时同步 architecture） | AI 自动 |
 | 难以逆转的选型/架构决定 | **decision**（ADR） | 用户意图 |
 | 新装工具、指针被覆盖、用户问"状态/正常吗/检查一下" | **doctor / sync** | 用户意图或 AI 自动 |
 | `handoffs/` 记录超过约 200 条 | **archive**（搬最旧的进 `archive/handoffs/`，活跃窗口不动） | AI 自动 |
-| 用户说"用 spec/sdd/speckit 做 XXX" | **speckit 全链**（见 §6） | 用户意图 |
+| 用户说"用 spec/sdd/speckit 做 XXX" | **speckit 全链**（见 §7） | 用户意图 |
 
 ## 1. init 全链（每个项目一次，AI 自动完成）
 
@@ -41,7 +66,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 2. 脚本会：建 `.ai-dev/`（模板来自 `assets/templates/`，不覆盖已有文件）、生成首份 code-index、给在用工具写指针。
 3. **脚本跑完不是结束**：你必须继续自动完成，不许把空模板留给用户——
    - 以 code-index 为地图扫描真实代码，**亲自起草** project-brief / architecture / conventions / glossary（术语表只留会被猜错的业务黑话与缩写）/ lessons（永久教训，初始可空）：事实只来自代码与用户陈述，不确定写"待确认"，禁止编造版本、命令、目录；
-   - **项目现状 spec 化**：扫描代码里的 TODO / FIXME / XXX、raise NotImplementedError、空函数、半成品模块；扫 git log 最近方向。把发现的功能逐个写进 specs/：已完成的写 spec.md（标注状态"已完成"），未完成的完整跑 spec → plan → tasks（见 §6）；不确定的标 [待确认]；
+   - **项目现状 spec 化**：扫描代码里的 TODO / FIXME / XXX、raise NotImplementedError、空函数、半成品模块；扫 git log 最近方向。把发现的功能逐个写进 specs/：已完成的写 spec.md（标注状态"已完成"），未完成的完整跑 spec → plan → tasks（见 §7）；不确定的标 [待确认]；
    - 起草后把"仅靠代码定不了、又会改变后续方向"的关键问题（真实运行命令、业务术语含义、本期边界）**一次性集中**向用户确认，不逐条打断、不为问而问；
    - architecture 要写出模块分区与"改什么去哪改"速查；HANDOFF 写入初始状态，元信息"进行中的 spec"列出所有未闭环的 spec；
    - 补项目特有忽略到 `.ai-dev/ignore.conf`（部署运行时目录、构建产物、凭据目录），重建一次索引；
@@ -56,7 +81,47 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 3. code-index 手工生成：列目录树 + 每个源码文件"路径（约 N 行）— 头部注释一句话"，忽略规则等价 ignore.conf。
 4. 后续 reindex/archive 同样手工增量完成，并在 HANDOFF 注明"本项目由无脚本路径初始化"。
 
-## 2. resume（新会话自动执行，不要求用户提醒）
+## 2. intake 需求受理（动手前必做，防特性漂移）
+
+用户的话是随意的：功能可能已做完、做一半，或正被改写；用户会插话、会在你输出后补要求。
+**照字面理解就会漂移。** 所以每次接到需求、每次要写文档前，先跑受理：
+
+```bash
+python scripts/doc_registry.py <项目根> --intake --user-file <用户原话文件>
+# 或短消息：--intake --user "把登录改成手机号"
+python scripts/doc_registry.py <项目根> --find <主题词>     # 手工复核有没有主文档
+```
+
+脚本会扫描四类证据并给出判定，你**必须按判定行动**，不得绕开：
+
+| 判定 | 含义 | 动作 |
+|---|---|---|
+| `EXTEND` | 已有 `active` 文档覆盖该主题 | **改那份文档**（在「需求变更」追加本次原话），禁止新建 |
+| `CONTINUE` | 有未闭环记录/specs，但还没有文档 | 接着做，并**补一份文档**把需求定下来 |
+| `NEW` | 三类证据均未覆盖 | 先 `--find` 换关键词二次确认，再建 `docs/<领域>-<主题>.md` 并登记 |
+| `FIX` | 修复既有行为 | 定位到规定该行为的那份文档，改它 |
+| `CORRECTION` | 用户否定/更正刚才的做法 | 并进**当前那份**需求文档，并在记录里写清"更正自上一条" |
+
+**文档纪律（硬性）**：
+
+- 一个需求只对应一份文档，**按主题命名**（`auth-sms-login.md`），
+  **严禁按对话轮次命名**（`登录-第2次.md` 是反模式，doctor 会报重复主题）。
+- 用户插话 / 追加 / 更正 / "不对，应该…" → 全部并进现有文档的「需求变更」小节，**绝不新建**。
+- 每份文档必须登记进 `docs/DOCS.md`（主题 / 状态 / 来源需求 / 最近更新）；
+  未登记就被 doctor 以**错误级**报出。
+- 文档只记"这个需求定成什么样、现状如何"，**不记过程**；过程在 `handoffs/`，活跃状态在 `HANDOFF.md`。
+- 文档超过两屏 → 拆成同主题子文档并互相引用，仍然一个需求一条线。
+
+**裁定留痕**：本轮 handoff 记录必须写 `### Intent`，例如：
+
+```text
+### Intent
+EXTEND → docs/auth-sms-login.md（用户中途插话：验证码改用固定测试码，续上一条的 Next 第 1 条）
+```
+
+没有这一行，下一个 Agent 无法知道该改哪份文档，只会重新建一份——漂移就是这样发生的。
+
+## 3. resume（新会话自动执行，不要求用户提醒）
 
 1. 读 START_HERE + HANDOFF + `handoffs/INDEX.md`，暂不预读 L2；沿 HANDOFF「下一步」继续。
    `INDEX.md` 的「开放 Next」列是**任何 Agent（含其他人）还欠的活**，动手前先扫，避免撞车。
@@ -67,7 +132,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 4. 定位代码先查 code-index，只精读目标文件；文档与代码冲突以代码为准并回写文档。动手前先查 `lessons.md`。
 5. 工具不自动加载规则文件时，用 references/tool-integrations.md §4 的开场白兜底。
 
-## 3. handoff（**每轮对话结束自动执行**，省 token 的核心）
+## 4. handoff（**每轮对话结束自动执行**，省 token 的核心）
 
 **每轮对话结束（你输出回复之后）都要写，不要等大任务完成。** 这是多会话并发、换 agent 不丢上下文的关键。
 单个 `HANDOFF.md` 装不下"每轮都写"（无限膨胀）且并行 Agent 会互相覆盖，因此每轮写**独立小文件**进 `.ai-dev/handoffs/`，
@@ -121,37 +186,47 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
   读对应 `tasks.md` 勾选项算进度（已完成 N / 共 M 条），把"specs/<名>/tasks.md 第 N/M 条（正在做什么）"写进 HANDOFF 元信息；
   已闭环的 spec 不写。spec.md / plan.md / tasks.md 归 `specs/`，不要复制进 `.ai-dev/`。
 
-## 4. 维护脚本（AI 调用；均纯标准库、跨平台、UTF-8、幂等）
+## 5. 维护脚本（AI 调用；均纯标准库、跨平台、UTF-8、幂等）
 
 ```text
-scripts/init_project.py <根> [--all] [--force]   # 初始化 + 首份索引 + 指针 + handoffs/
+scripts/init_project.py <根> [--all] [--force]   # 初始化 + 首份索引 + 指针 + handoffs/ + docs/
+scripts/doc_registry.py <根>                     # 需求受理 + 文档登记（动手前必跑）
+    --intake --user-file U | --user "..."        # 受理裁定：改现有文档还是新建（含证据）
+    --find <关键词>                              # 找现有文档
+    --add <文件> --topic <主题> --source <来源>  # 登记一份文档
+    --list / --rebuild / --check / --archive <文件>
 scripts/log_handoff.py <根>                      # 追加一轮压缩记录 + 重建 INDEX（每轮收工调用）
-    --user-file U --body-file B [--agent A] [--session S] [--model M]
-    --user "..." --done "..." --next "..." --verify "..." --risks "..."   # 快捷参数，可缺省组合
+    --user-file U --body-file B [--agent A] [--session S] [--model M] [--intent "裁定结论"]
+    --user "..." --done "..." --next "..." --verify "..." --risks "..." --intent "..."   # 快捷参数，可缺省组合
     --template                # 打印条目模板
     --list / --tail N [--agent A]   # 读：全部一览 / 最近 N 条全文（换 Agent 后恢复现场）
     --rebuild-index / --init  # 只重建索引 / 建 handoffs/
 scripts/build_index.py <根> [--max-lines 1200]   # 重建代码地图（尊重 .gitignore 与 ignore.conf）
 scripts/sync_rules.py <根> [--all] [--inject] [--check]   # 指针同步/校验
 scripts/archive_handoff.py <根> [--max-lines 120] [--max-entries 200] [--entries-only]
-scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/git误忽略/handoffs腐化
+scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/git误忽略/handoffs腐化/文档腐化
 ```
 
+- **doc_registry**：`--intake` 扫四类证据（handoffs 开放 Next、specs 未闭环、docs 索引、code-index）给出
+  NEW/EXTEND/CONTINUE/FIX/CORRECTION 判定；裁定优先级固定为 active 文档 > 未闭环记录 > specs，
+  **不得跳过**。`DOCS.md` 原子重建；未登记文档以错误级报出。
 - **log_handoff**：一条记录一个文件，只增不改；`INDEX.md` 用临时文件 + 原子替换重建，并有文件锁，
   多 Agent 并发写安全。同秒同 Agent 同会话的第二次写入自动加序号防碰撞。
+  `--intent` 在涉及"改/建文档"时**必填**（记录裁定结论，防后续 Agent 重新建文档）。
 - **sync_rules**：纯指针随时刷新；手写规则文件默认不覆盖只报 conflict，`--inject` 用 begin/end 标记块注入、块外内容绝不丢，可重复执行。
 - **archive_handoff**：绝不触碰归档线以上的活跃区；`--max-entries` 只把最旧的对话记录搬进 `archive/handoffs/`，活跃窗口不动；
   活跃区本身超限只提示 AI 手工压缩。
 - **doctor**：无参数出分级报告（退出码 0 健康 / 1 警告 / 2 错误）；`--fix` 自动补缺、重建过时索引、归档、同步指针、
-  重建 handoffs 索引。handoffs 专项检查：索引与磁盘漂移、记录缺 schema/缺用户原话/无压缩节、记录数超限、
-  HANDOFF.md 落后于流水。用户问"正常吗/检查下"或 init 收尾时运行。
+  重建 handoffs 与 docs 索引。handoffs 专项检查：索引与磁盘漂移、记录缺 schema/缺用户原话/无压缩节、记录数超限、
+  HANDOFF.md 落后于流水。docs 专项检查：文档未登记（错误级）、缺主题/缺来源需求、主题重复、无记录引用。
+  用户问"正常吗/检查下"或 init 收尾时运行。
 - 新增工具支持：只改 `scripts/_common.py` 的 TOOL_SPECS 一处。
 
-## 5. decision（ADR）
+## 6. decision（ADR）
 
 复制 `decisions/0000-template.md` 为 `NNNN-短标题.md`，记背景、备选、决策、后果，只记"为什么"。
 
-## 6. speckit / Spec Kit 联动（用户说"用 spec 做 XXX"时自动执行）
+## 7. speckit / Spec Kit 联动（用户说"用 spec 做 XXX"时自动执行）
 
 本技能内置 [github/spec-kit](https://github.com/github/spec-kit) 规格驱动开发（SDD）流程。用户只装 devctx，说"用 spec/sdd/speckit 做 XXX"即可自动跑完整流程，不需要单独安装 spec-kit skill。
 
@@ -204,6 +279,9 @@ handoff 时自动读 `specs/<进行中名>/tasks.md`，数勾选数量（已完�
 - `.ai-dev/` 必备文件齐全，L2 是据实填写的实质内容而非空模板（glossary / lessons 可选，存在则应已填写）；doctor 无 error。
 - `handoffs/` 已初始化，本轮对话已追加一条符合压缩规范的记录（时间戳 + Agent-会话Id + 完整用户原话 + 至少一段 Done/Next/Verify/Risks），
   `INDEX.md` 与磁盘记录数一致，`HANDOFF.md` 已滚动进最新结论。
+- **动手前跑过 `--intake` 并按其判定行动**；涉及改/建文档时，本轮记录写了 `### Intent` 指明落到哪份文档。
+- `docs/` 里本需求的文档已登记进 `DOCS.md`（主题 / 状态 / 来源需求），
+  **没有按对话轮次新建的第二份文档**；用户插话与追加都已并进同一份文档。
 - code-index 与当前文件结构一致、无运行时噪音；在用工具指针同步、手写规则未被破坏。
 - HANDOFF 能让全新会话仅凭它 + START_HERE 对齐现状，且不超长。
 - 全程未让用户手动执行命令；无 Python 时已走降级路径落地。

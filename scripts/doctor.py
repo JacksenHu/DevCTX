@@ -13,12 +13,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from _common import AI_DEV_DIR, HANDOFFS_DIR, find_project_root, load_ignore_lines, read_text, write_text  # noqa: E402
+from _common import AI_DEV_DIR, DOCS_DIR, HANDOFFS_DIR, find_project_root, load_ignore_lines, read_text, write_text  # noqa: E402
 import sync_rules  # noqa: E402
 import build_index  # noqa: E402
 import archive_handoff  # noqa: E402
 import init_project  # noqa: E402
 import log_handoff  # noqa: E402
+import doc_registry  # noqa: E402
 
 REQUIRED = [
     "START_HERE.md", "HANDOFF.md", "project-brief.md",
@@ -273,6 +274,77 @@ def check_handoffs(root: Path, ai: Path, fix: bool) -> list[Finding]:
     return out
 
 
+def check_docs(root: Path, ai: Path, fix: bool) -> list[Finding]:
+    """腐化检查：文档是否登记在案、格式合规、无重复主题、来源可追溯。"""
+    out = []
+    docs_dir = ai / DOCS_DIR
+    if not docs_dir.is_dir():
+        if fix:
+            doc_registry.cmd_init(root)
+            return [Finding("ok", "docs", f"created {DOCS_DIR}/ + {doc_registry.DOC_INDEX_NAME}")]
+        return [Finding("warn", "docs",
+                        f"{DOCS_DIR}/ missing; 需求文档无处安放会导致乱建文件 — "
+                        "rerun with --fix to create it")]
+
+    docs = doc_registry.scan_docs(docs_dir)
+    idx = docs_dir / doc_registry.DOC_INDEX_NAME
+
+    if not docs:
+        out.append(Finding("ok", "docs", f"{DOCS_DIR}/ empty (no requirement docs yet)"))
+        return out
+
+    on_disk = {d.name for d in docs}
+    in_index: set[str] = set()
+    if idx.is_file():
+        in_index = set(re.findall(r"^\|\s*`([^`]+\.md)`", read_text(idx), re.M))
+    orphans = sorted(on_disk - in_index)
+    if orphans:
+        if fix:
+            for d in docs:
+                d.links = doc_registry.count_links(root, d.name)
+            doc_registry.rebuild_index(docs_dir)
+            out.append(Finding("ok", "docs",
+                               f"registered un-indexed doc(s): {', '.join(orphans)}"))
+        else:
+            out.append(Finding("err", "docs",
+                               f"doc(s) exist but are not registered in "
+                               f"{doc_registry.DOC_INDEX_NAME}: {', '.join(orphans)}; "
+                               "rerun with --fix"))
+    elif idx.is_file():
+        out.append(Finding("ok", "docs", f"{len(docs)} doc(s) all registered"))
+    else:
+        out.append(Finding("warn", "docs",
+                           f"{doc_registry.DOC_INDEX_NAME} missing; rerun with --fix"))
+
+    bad = [d for d in docs if d.malformed]
+    if bad:
+        detail = "; ".join(f"{d.name}:{','.join(d.malformed)}" for d in bad[:3])
+        out.append(Finding("warn", "docs", f"{len(bad)} doc(s) incomplete; e.g. {detail}"))
+
+    dupes = []
+    for i, a in enumerate(docs):
+        for b in docs[i + 1:]:
+            if a.is_archived or b.is_archived:
+                continue
+            if doc_registry._score(doc_registry._terms(a.topic),
+                                   doc_registry._terms(b.topic)) >= 6.0:
+                dupes.append(f"{a.name} vs {b.name}")
+    if dupes:
+        out.append(Finding("err", "docs",
+                           f"duplicate topic(s): {'; '.join(dupes[:3])} — merge them, "
+                           "one requirement maps to one document"))
+    else:
+        out.append(Finding("ok", "docs", "no duplicate topics"))
+
+    unlinked = [d.name for d in docs
+                if not d.is_archived and doc_registry.count_links(root, d.name) == 0]
+    if unlinked:
+        out.append(Finding("warn", "docs",
+                           f"no handoff record references: {', '.join(unlinked[:3])}; "
+                           "来源需求不可追溯，补一条带 Intent 的记录"))
+    return out
+
+
 def run_doctor(root: Path, fix: bool) -> list[Finding]:
     ai = root / AI_DEV_DIR
     if not ai.is_dir():
@@ -283,6 +355,7 @@ def run_doctor(root: Path, fix: bool) -> list[Finding]:
     findings += check_index(root, ai, fix)
     findings += check_handoff(ai, root, fix)
     findings += check_handoffs(root, ai, fix)
+    findings += check_docs(root, ai, fix)
     findings += check_pointers(root, fix)
     findings += check_git(root)
     findings += check_schema(ai)
