@@ -13,13 +13,14 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from _common import AI_DEV_DIR, DOCS_DIR, HANDOFFS_DIR, find_project_root, load_ignore_lines, read_text, write_text  # noqa: E402
+from _common import AI_DEV_DIR, DOCS_DIR, HANDOFFS_DIR, TOOL_SPECS, find_project_root, load_ignore_lines, read_text, write_text  # noqa: E402
 import sync_rules  # noqa: E402
 import build_index  # noqa: E402
 import archive_handoff  # noqa: E402
 import init_project  # noqa: E402
 import log_handoff  # noqa: E402
 import doc_registry  # noqa: E402
+import retrofit  # noqa: E402
 
 REQUIRED = [
     "START_HERE.md", "HANDOFF.md", "project-brief.md",
@@ -31,6 +32,21 @@ HANDOFF_LIMIT = 120
 FILLED_RATIO = 0.25
 HANDOFFS_ENTRY_LIMIT = 200      # 超过就该归档旧条目
 HANDOFFS_MALFORMED_LIMIT = 5    # 格式待修条目超过这个数视为腐化
+
+# probe 报告的工具名 -> TOOL_SPECS tid。codex 的指针就是 AGENTS.md 兜底入口；
+# gemini-cli/roo-code 是 probe 侧的历史命名，与 tid 差一个后缀。
+_PROBE_TO_TID = {
+    "claude-code": "claude-code",
+    "aider": "aider",
+    "codex": "agents",
+    "gemini-cli": "gemini",
+    "continue": "continue",
+    "cline": "cline",
+    "roo-code": "roo",
+    "cursor": "cursor",
+    "windsurf": "windsurf",
+    "trae": "trae",
+}
 
 
 @dataclass
@@ -345,6 +361,59 @@ def check_docs(root: Path, ai: Path, fix: bool) -> list[Finding]:
     return out
 
 
+def check_session_stores(root: Path, fix: bool) -> list[Finding]:
+    """本机会话存储探测 vs 项目指针：本地在用的工具没有专属指针，新会话读不到上下文。
+
+    目录证据（.cursor/、CLAUDE.md 等）只能证明"这个项目里见过该工具"；
+    会话存储证据说明"用户在这台机器上就用它开发"——后者更强，正是
+    retrofit probe 已有的能力。反向不报：项目有指针而本机没存储，是换机器、
+    克隆场景的正常形态。--fix 只给"有本地会话证据且缺指针"的工具定点补指针，
+    不擅自给机器上装过的所有工具全量写。
+    """
+    hits = retrofit.run_probe(root)
+    if not hits:
+        return [Finding("ok", "session-stores",
+                        "本机未发现已知工具的会话存储（探测只读元数据，不碰正文）")]
+    specs = {s.tid: s for s in TOOL_SPECS}
+    covered: list[str] = []
+    missing: list[tuple[str, object]] = []
+    scoped: list[str] = []
+    for h in hits:
+        tid = _PROBE_TO_TID.get(h.tool)
+        if tid is None:
+            continue
+        if h.scoped:
+            scoped.append(h.tool)
+        if tid == "agents":
+            continue                    # AGENTS.md 缺失归 check_pointers 报，不重复
+        spec = specs[tid]
+        if (root / spec.rel).is_file():
+            covered.append(h.tool)
+        else:
+            missing.append((h.tool, spec))
+    if missing:
+        names = ", ".join(f"{t}->{s.rel}" for t, s in missing)
+        if fix:
+            written = [a.rel for _t, spec in missing
+                       for a in [sync_rules.sync_one(root, spec, inject=False, check=False)]
+                       if a.status in ("written", "updated", "injected")]
+            if written:
+                return [Finding("ok", "session-stores",
+                                f"已按本地会话证据补指针: {', '.join(written)}")]
+            return [Finding("ok", "session-stores", "本地在用工具的指针均已存在")]
+        return [Finding("warn", "session-stores",
+                        f"本机在用 {names}（会话存储里有实证），项目却无对应指针；"
+                        "该工具的新会话读不到 .ai-dev 上下文 — "
+                        "rerun with --fix 或手动 sync_rules.py --all")]
+    if covered:
+        detail = f"本机 {len(covered)} 个在用工具的指针齐全"
+    else:
+        detail = "仅 AGENTS.md 兜底范围的工具有本地会话，指针天然覆盖"
+    if scoped:
+        detail += f"；{', '.join(sorted(set(scoped)))} 的会话已确认属于本项目"
+    return [Finding("ok", "session-stores", detail)]
+
+
 def run_doctor(root: Path, fix: bool) -> list[Finding]:
     ai = root / AI_DEV_DIR
     if not ai.is_dir():
@@ -357,6 +426,7 @@ def run_doctor(root: Path, fix: bool) -> list[Finding]:
     findings += check_handoffs(root, ai, fix)
     findings += check_docs(root, ai, fix)
     findings += check_pointers(root, fix)
+    findings += check_session_stores(root, fix)
     findings += check_git(root)
     findings += check_schema(ai)
     return findings
@@ -372,7 +442,7 @@ def main() -> int:
     findings = run_doctor(root, args.fix)
     icon = {"ok": "[OK]", "warn": "[! ]", "err": "[XX]"}
     for f in findings:
-        print(f"{icon[f.level]} {f.area.ljust(11)} {f.msg}")
+        print(f"{icon[f.level]} {f.area.ljust(14)} {f.msg}")
     errs = [f for f in findings if f.level == "err"]
     warns = [f for f in findings if f.level == "warn"]
     print(f"\n{len(findings)} checks: {len(errs)} error(s), {len(warns)} warning(s)"

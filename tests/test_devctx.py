@@ -927,6 +927,48 @@ class TestProbe(unittest.TestCase):
         self.assertIn("a1b2c3d4", r.stdout)
         self.assertIn("git 画像名本身就是稳定标签", r.stdout)
 
+    # ---- doctor 集成：本机会话证据驱动指针补齐 ----
+
+    def run_doctor(self, *extra: str) -> subprocess.CompletedProcess:
+        env = {**os.environ, "HOME": str(self.home)}
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / "doctor.py"), str(self.tmp), *extra],
+            capture_output=True, text=True, encoding="utf-8", env=env,
+        )
+
+    def test_doctor_flags_local_tool_without_pointer(self) -> None:
+        init_project.init(self.tmp, "detected", False)
+        self._claude_session("a1b2c3d4", "11")
+        r = self.run_doctor()
+        self.assertTrue(r.stdout, r.stderr)
+        self.assertIn("session-stores", r.stdout)
+        self.assertIn("本机在用", r.stdout)
+        self.assertIn("claude-code->CLAUDE.md", r.stdout)
+        self.assertIn("sync_rules.py --all", r.stdout)
+        self.assertNotIn("不许被探测读走", r.stdout)   # 隐私红线：正文绝不出现
+
+    def test_doctor_flags_unscoped_local_store_too(self) -> None:
+        # 全局存储（未确认归属本项目）同样是"本机在用"的实证，一样要报
+        init_project.init(self.tmp, "detected", False)
+        (self.tmp / ".aider.chat.history.md").write_text(
+            "# aider chat started\n#### 把登录改成手机号\nsome reply\n", encoding="utf-8")
+        r = self.run_doctor()
+        self.assertIn("aider->CONVENTIONS.md", r.stdout)
+
+    def test_doctor_fix_writes_pointer_for_local_tool(self) -> None:
+        init_project.init(self.tmp, "detected", False)
+        self._claude_session("a1b2c3d4", "11")
+        r = self.run_doctor("--fix")
+        self.assertTrue(r.stdout, r.stderr)
+        self.assertTrue((self.tmp / "CLAUDE.md").is_file(), "--fix 必须补指针")
+        self.assertIn("已按本地会话证据补指针", r.stdout)
+
+    def test_doctor_silent_when_no_local_stores(self) -> None:
+        init_project.init(self.tmp, "detected", False)
+        r = self.run_doctor()
+        self.assertIn("session-stores", r.stdout)
+        self.assertIn("未发现", r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

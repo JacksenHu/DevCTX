@@ -244,7 +244,7 @@ scripts/log_handoff.py <根>                      # 追加一轮压缩记录 + �
 scripts/build_index.py <根> [--max-lines 1200]   # 重建代码地图（尊重 .gitignore 与 ignore.conf）
 scripts/sync_rules.py <根> [--all] [--inject] [--check]   # 指针同步/校验
 scripts/archive_handoff.py <根> [--max-lines 120] [--max-entries 200] [--entries-only]
-scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/git误忽略/handoffs腐化/文档腐化
+scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/本机在用工具缺指针/git误忽略/handoffs腐化/文档腐化
 ```
 
 - **doc_registry**：`--intake` 扫四类证据（handoffs 开放 Next、specs 未闭环、docs 索引、code-index）给出
@@ -263,6 +263,8 @@ scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模�
 - **doctor**：无参数出分级报告（退出码 0 健康 / 1 警告 / 2 错误）；`--fix` 自动补缺、重建过时索引、归档、同步指针、
   重建 handoffs 与 docs 索引。handoffs 专项检查：索引与磁盘漂移、记录缺 schema/缺用户原话/无压缩节、记录数超限、
   HANDOFF.md 落后于流水。docs 专项检查：文档未登记（错误级）、缺主题/缺来源需求、主题重复、无记录引用。
+  session-stores 专项检查：复用 retrofit probe 探测本机会话存储，本机在用某工具但项目缺其专属指针时警告
+  （没有指针，该工具的新会话读不到 `.ai-dev` 上下文）；`--fix` 只给有本地会话证据且缺指针的工具定点补指针。
   用户问"正常吗/检查下"或 init 收尾时运行。
 - 新增工具支持：只改 `scripts/_common.py` 的 TOOL_SPECS 一处。
 

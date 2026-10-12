@@ -190,7 +190,7 @@ git 历史：Alice 三月/九月各一批、Bob 六月一批
 - **handoff（每轮对话结束自动）**：往 `handoffs/` 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks + Intent 受理结论），并把最新结论滚动进 HANDOFF.md；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。
 - **retrofit（存量多 Agent 项目接入）**：`scan` 把 git 历史切成历史会话画像、清点存量文档与半成品信号；`baseline` 为每个历史会话回填一条合规记录（"压缩各会话 Id"）；`consolidate` 给存量文档归并建议并登记；最后 doctor 清零。
 - **archive（记录超量自动）**：HANDOFF 超 120 行搬历史区，`handoffs/` 超 200 条搬最旧的进 `archive/handoffs/`，活跃窗口不动。
-- **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）、**未登记文档 / 文档缺主题或来源 / 主题重复**等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
+- **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、**本机在用工具缺专属指针**（probe 探测会话存储：本地在用的工具没有指针，它的新会话读不到 `.ai-dev` 上下文，`--fix` 定点补齐）、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）、**未登记文档 / 文档缺主题或来源 / 主题重复**等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
 
 ## 已覆盖的 AI 工具（12 种，可扩展）
 
@@ -209,7 +209,7 @@ devctx/
 │   ├── build_index.py           # 生成代码地图（尊重 .gitignore 与 ignore.conf）
 │   ├── sync_rules.py            # 生成/校验/注入各工具薄指针（幂等）
 │   ├── archive_handoff.py       # 安全归档超长 HANDOFF 历史与超量对话记录
-│   ├── doctor.py                # 健康体检 + --fix 自动修复（含 handoffs / docs 腐化检查）
+│   ├── doctor.py                # 健康体检 + --fix 自动修复（含 handoffs / docs 腐化 / session-stores 检查）
 │   └── _common.py               # 工具映射表、项目根探测、忽略匹配、Agent/会话识别
 ├── assets/templates/            # 初始化时复制进项目的自包含模板
 │   ├── START_HERE.md            # L1 入口
