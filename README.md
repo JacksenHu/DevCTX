@@ -1,6 +1,6 @@
 # devctx
 
-[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-unreleased-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](scripts/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](scripts/)
@@ -8,9 +8,15 @@
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型 / 时间 / 人之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token、不重复踩旧坑。
 > 内置 **Spec Kit（SDD）**：init 时自动把项目现状 spec 化，说"用 spec 做 XXX"自动跑完整规格驱动开发流程。
 >
-> 最新版本 **v0.4.1** · 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新功能见 [CHANGELOG](CHANGELOG.md)（Unreleased：probe 本机会话探测 / doctor session-stores 体检 / handoff 反寻与追加确认）· 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
-![跨 IDE 统一上下文机制图解](docs/context-architecture.svg)
+**[▶ 打开动态骨架导图（交互版，一屏看完全部机制）](https://af49fc77d61398fc8.app.workbuddy.host)**
+
+<a href="https://af49fc77d61398fc8.app.workbuddy.host"><img src="docs/devctx-map.png" alt="动态骨架导图：12 个工具 × 四层上下文 × 十个功能模块" width="720"></a>
+
+*↑ 动态骨架导图（点击打开交互版；clone 本仓库后也可直接双击 `docs/devctx-map.html` 离线查看，单文件零依赖）*
+
+![四层上下文静态图解](docs/context-architecture.svg)
 
 切换工具之所以贵，是因为 AI 对项目的认知只存在于**易失的对话历史**里——每换一个 IDE、一个模型、隔几周回来、或换个人接手，它都要重新遍历代码库、重新猜结构、重新踩一遍旧坑。
 
@@ -42,6 +48,17 @@
 | **⑦ 接手多 Agent 遗留项目** | 项目已被好几个 AI 会话开发过，代码是攒的、文档散落、半成品看不见 | `retrofit.py` 把 git 历史切成历史会话画像回填成记录，存量文档按"一个需求一份文档"归并登记 |
 
 > 哪怕你只用一个 IDE、一个模型，这个项目也有用——**单人长期项目的"冬眠后苏醒"** 和 **`lessons.md` 沉淀"这个项目永远不能这么干"** 本身就值回票价。
+
+## 动态骨架导图：一屏看完全部机制
+
+文字协议读三遍，不如看图一遍。导图把整个 devctx 画成一棵**深色终端风格的骨架流程树**，带绘制动画：
+
+- **12 个 AI 工具**（真实品牌图标）沿 AGENT TREE 分布，各自薄指针指向同一棵上下文树；
+- **四层上下文**（L0 指针 → L1 入口 → L2 长期记忆 → L3 工作记忆）为主线；
+- **十个功能模块**一张卡一个：handoffs 压缩流水、intake 需求受理、docs 文档治理、specs·规格驱动 SDD、code-index 代码地图、retrofit 存量接入、sync_rules 工具指针、L2 长期记忆（术语表 + lessons）、decisions·ADR、doctor 体检；
+- 交互：点击模块跳到对应协议章节；移动端横屏观看，内置全屏按钮。
+
+**[▶ 打开交互版导图](https://af49fc77d61398fc8.app.workbuddy.host)** ｜ 离线版：`docs/devctx-map.html`（仓库内单文件，零外部依赖，浏览器直接打开）
 
 ## 核心模型：四层上下文
 
@@ -224,7 +241,10 @@ devctx/
 │   ├── lessons.md               # L2：永久教训（可选）
 │   └── decisions/0000-template.md
 ├── references/                  # 分层协议详解 & 各工具集成机制（AI 按需读）
-└── docs/context-architecture.svg
+└── docs/
+    ├── context-architecture.svg # 四层上下文静态图解
+    ├── devctx-map.html          # 动态骨架导图（单文件零依赖，交互版）
+    └── devctx-map.png           # 导图缩略图（永久链接：https://af49fc77d61398fc8.app.workbuddy.host）
 ```
 
 使用者只与 `SKILL.md`（间接，通过对话触发）打交道；`scripts/`、`assets/`、`references/` 都由 AI 自行取用。

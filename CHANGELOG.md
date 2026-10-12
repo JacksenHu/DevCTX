@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Added
+- **动态骨架导图（`docs/devctx-map.html`，单文件零依赖）**：深色终端风格的交互导图——
+  12 个 AI 工具（真实品牌图标）沿 AGENT TREE 分布、四层上下文为主线、十个功能模块
+  一张卡一个（handoffs / intake / docs / specs·SDD / code-index / retrofit / sync_rules /
+  L2 记忆 / decisions·ADR / doctor），带骨架绘制动画，点击模块跳协议章节；
+  移动端横屏适配 + 全屏按钮。永久链接：
+  <https://af49fc77d61398fc8.app.workbuddy.host>（README 与仓库主页均已挂上）
 - **存量多 Agent 项目接入（`scripts/retrofit.py`）**：治"项目已被多个 Agent/会话开发过"的接入难题
   - `scan`：按"作者 × 时间窗"（间隔超 14 天自动分窗）把 git 历史切成**历史会话画像**
     （`legacy-bob` / `legacy-alice-2`…），并列存量 .md 清单与 TODO/FIXME 半成品信号；

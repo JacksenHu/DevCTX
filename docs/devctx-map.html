@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>DevCTX · 动态骨架导图 — 统一上下文协议全景</title>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#0f151d; --line:#1b2735; --line2:#243447;
+  --txt:#c9d6e3; --dim:#5c6f82; --cy:#4fd8e8; --gr:#7ee787; --am:#f2cc60; --rd:#ff7b72;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--txt);
+  font-family:ui-monospace,"JetBrains Mono","SF Mono",Cascadia Code,Menlo,Consolas,"Liberation Mono",monospace;}
+body{padding:18px;}
+.wrap{max-width:1480px;margin:0 auto;}
+/* ---------- header ---------- */
+.bar{display:flex;align-items:center;gap:14px;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:10px 16px;flex-wrap:wrap;}
+.dots{display:flex;gap:7px}.dots i{width:11px;height:11px;border-radius:50%;display:block}
+.dots i:nth-child(1){background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
+.title{font-size:14px;letter-spacing:.5px;color:var(--cy);font-weight:700}
+.title small{color:var(--dim);font-weight:400;margin-left:10px;letter-spacing:0}
+.tabs{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.tab{background:transparent;border:1px solid var(--line2);color:var(--dim);border-radius:8px;
+  padding:6px 14px;font:inherit;font-size:12px;cursor:pointer;transition:.25s}
+.tab:hover{color:var(--txt);border-color:var(--cy)}
+.tab.on{color:#06222a;background:var(--cy);border-color:var(--cy);font-weight:700}
+.fs-btn{background:transparent;border:1px solid var(--line2);color:var(--dim);border-radius:8px;
+  padding:6px 12px;font:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;
+  gap:6px;transition:.25s;flex:0 0 auto}
+.fs-btn:hover{color:var(--txt);border-color:var(--cy)}
+.fs-btn.on{color:#06222a;background:var(--cy);border-color:var(--cy);font-weight:700}
+.leds{display:flex;gap:14px;font-size:11px;color:var(--dim)}
+.leds b{color:var(--gr);font-weight:400}
+.led{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gr);
+  margin-right:5px;animation:blink 2.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+/* ---------- map ---------- */
+.mapbox{position:relative;margin-top:14px;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;overflow:hidden;}
+.mapbox svg{display:block;width:100%;height:auto}
+.scanline{position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(79,216,232,.028) 0 1px,transparent 1px 3px);}
+.scanbeam{position:absolute;left:0;right:0;height:120px;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(79,216,232,.06),transparent);
+  animation:beam 7s linear infinite;}
+@keyframes beam{0%{top:-15%}100%{top:110%}}
+/* svg skeleton animation */
+.sk{stroke-dasharray:1400;stroke-dashoffset:1400;animation:draw 1.5s cubic-bezier(.4,0,.2,1) forwards;
+  animation-delay:var(--d,0s);}
+@keyframes draw{to{stroke-dashoffset:0}}
+.card{fill:#0d141d;stroke:var(--line2);stroke-width:1.2;}
+.card.dashed{stroke-dasharray:6 5;fill:#0c131b;}
+.card.inner{fill:#0b1119;}
+.card.glow-c{stroke:var(--cy);filter:drop-shadow(0 0 14px rgba(79,216,232,.25));}
+.edge{fill:none;stroke:var(--line2);stroke-width:1.1;}
+.e-root{stroke:#2b4258;}
+.e-feed{stroke:#24465c;stroke-dasharray:4 4;}
+.bus-line{stroke:var(--cy);stroke-width:1.4;stroke-dasharray:5 6;opacity:.55;
+  animation:flow 1.2s linear infinite;}
+@keyframes flow{to{stroke-dashoffset:-22}}
+.sep{stroke:var(--line2);stroke-dasharray:2 3;}
+.t-name{fill:var(--cy);font-size:13px;font-weight:700;letter-spacing:.6px}
+.t-title{fill:#e6eef7;font-size:13px;font-weight:700}
+.t-label{fill:#dbe7f3;font-size:13px;font-weight:700}
+.t-sub{fill:#8fa6bc;font-size:11px}
+.t-sub.dim{fill:var(--dim)}
+.live-dot{fill:var(--gr);animation:blink 2s infinite}
+.ico-bubble{fill:#101a24;stroke:currentColor;stroke-width:1.2;opacity:.9}
+.ico-wrap svg{width:22px;height:22px;display:block}
+.ico-wrap image{display:block}
+.agent-node{transition:.3s}
+.agent-node:hover .card{stroke:var(--cy);filter:drop-shadow(0 0 10px rgba(79,216,232,.35))}
+.pulse{opacity:.9}
+.p-agent{fill:var(--cy)}
+.p-feed{fill:var(--gr)}
+/* section focus states */
+.focus-dim .feat-node,.focus-dim .root-node,.focus-dim .agent-node,.focus-dim .bus-node{
+  opacity:.28;transition:opacity .5s}
+.focus-dim .feat-node.on,.focus-dim .root-node.on,.focus-dim .agent-node.on,.focus-dim .bus-node.on{
+  opacity:1;}
+.on .card.glow-c,.on .card{stroke:var(--cy);}
+.on .card.dashed{stroke:var(--cy);}
+/* ---------- pipelines ---------- */
+.pipes{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:980px){.pipes{grid-template-columns:1fr}}
+.pipe{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.pipe h3{font-size:12px;color:var(--cy);letter-spacing:.8px;margin-bottom:12px;font-weight:700}
+.pipe h3 span{color:var(--dim);font-weight:400;margin-left:8px}
+.steps{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:4px}
+.step{min-width:118px;background:#0d141d;border:1px solid var(--line2);border-radius:8px;
+  padding:8px 10px;position:relative;flex:1;transition:.3s}
+.step b{display:block;font-size:11.5px;color:#e6eef7;margin-bottom:3px}
+.step small{font-size:10px;color:var(--dim);line-height:1.5;display:block}
+.step .n{position:absolute;top:-8px;left:-8px;width:18px;height:18px;border-radius:50%;
+  background:var(--cy);color:#06222a;font-size:10px;font-weight:700;display:grid;place-items:center}
+.arrow{align-self:center;color:#2b4258;font-size:14px;padding:0 5px;flex:0 0 auto}
+.step.lit{border-color:var(--cy);box-shadow:0 0 12px rgba(79,216,232,.25);transform:translateY(-2px)}
+.step.lit b{color:var(--cy)}
+/* ---------- console ---------- */
+.console{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  display:grid;grid-template-columns:1fr 300px;gap:0;overflow:hidden;}
+@media(max-width:980px){.console{grid-template-columns:1fr}}
+.c-out{padding:14px 18px;font-size:12.5px;line-height:1.9;min-height:120px;white-space:pre-wrap;}
+.c-out .ps1{color:var(--gr)}
+.c-out .k{color:var(--cy)}
+.c-out .w{color:var(--am)}
+.c-out .d{color:var(--dim)}
+.c-side{border-left:1px solid var(--line);padding:14px 18px;display:flex;flex-direction:column;gap:9px;
+  background:#0c1219;}
+@media(max-width:980px){.c-side{border-left:none;border-top:1px solid var(--line)}}
+.metric{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim)}
+.metric b{color:var(--txt);font-weight:700;font-size:13px}
+.metric b.up{color:var(--gr)}
+/* ---------- footer ---------- */
+.foot{margin-top:14px;color:var(--dim);font-size:11px;line-height:1.9;padding:0 4px 8px}
+.foot code{color:#8fa6bc;background:#0d141d;border:1px solid var(--line);border-radius:5px;
+  padding:1px 6px;font-size:10.5px}
+/* stream chips inside bus */
+.chip{fill:#0f1a24;stroke:var(--cy);stroke-width:.8}
+.chip-t{fill:#9fdede;font-size:9px;font-family:inherit}
+/* ---------- mobile ---------- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.map-wrap{position:relative}
+.map-hint{display:none}
+.rotate-hint{display:none}
+@media(max-width:900px){
+  body{padding:10px}
+  .bar{gap:8px 10px;padding:9px 12px}
+  .title{font-size:12.5px;line-height:1.5}
+  .title small{display:block;margin:1px 0 0}
+  .tabs{margin-left:0;width:100%;gap:6px}
+  .tab{padding:5px 10px;font-size:11.5px}
+  .leds{margin-left:auto;font-size:10.5px;gap:10px}
+  .fs-btn{padding:5px 9px;font-size:11px}
+  .fs-btn span{display:none}
+  /* map: pan horizontally instead of shrinking to unreadable ~3px text */
+  .mapbox{overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+  .mapbox svg{min-width:1140px}
+  .mapbox .t-name{font-size:17px}
+  .mapbox .t-title{font-size:16px}
+  .mapbox .t-label{font-size:16px}
+  .mapbox .t-sub{font-size:14px}
+  .mapbox .t-sub.dim{font-size:13px}
+  .mapbox .chip-t{font-size:11.5px}
+  .map-hint{display:block;margin-top:6px;color:var(--dim);font-size:11px;text-align:center}
+  /* pipelines */
+  .pipe{padding:12px}
+  .step{min-width:138px}
+  .step b{font-size:12.5px}
+  .step small{font-size:11px}
+  /* console metrics: 2-col grid instead of tall stack */
+  .c-side{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;
+    border-left:none;border-top:1px solid var(--line)}
+  .metric{font-size:12px}
+  .metric b{font-size:14px}
+  .c-out{font-size:12px;line-height:1.8;padding:12px 14px}
+  .foot{font-size:10.5px}
+}
+/* portrait touch devices: guide to landscape */
+@media(max-width:900px) and (orientation:portrait) and (pointer:coarse){
+  .rotate-hint{display:flex;position:absolute;inset:0;z-index:6;
+    align-items:center;justify-content:center;padding:16px;
+    background:rgba(9,13,18,.86);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+  .rotate-hint.dismissed{display:none}
+  .rh-box{text-align:center;max-width:300px}
+  .rh-box b{display:block;color:var(--cy);font-size:15px;letter-spacing:.5px;margin:12px 0 6px}
+  .rh-box small{display:block;color:var(--dim);font-size:11.5px;line-height:1.7;margin-bottom:16px}
+  .rh-btn{background:transparent;border:1px solid var(--cy);color:var(--cy);border-radius:8px;
+    padding:8px 18px;font:inherit;font-size:12.5px;cursor:pointer;display:block;width:100%;margin-bottom:8px}
+  .rh-btn:active{background:var(--cy);color:#06222a}
+  .rh-primary{background:var(--cy);color:#06222a;font-weight:700}
+  .rh-primary:active{opacity:.85}
+  .rh-ghost{border-color:var(--line2);color:var(--dim)}
+  .rh-ico{animation:rhwob 2.8s ease-in-out infinite}
+  @keyframes rhwob{0%,100%{transform:rotate(0)}45%{transform:rotate(-90deg)}60%{transform:rotate(-90deg)}92%{transform:rotate(0)}}
+}
+/* landscape phones/tablets: use the wide screen — real refactor for 横屏 */
+@media(max-width:1100px) and (orientation:landscape){
+  body{padding:8px}
+  .bar{padding:7px 12px}
+  .title{font-size:12px}
+  .title small{display:none}
+  .tab{padding:4px 9px;font-size:11px}
+  .leds{font-size:10px;gap:8px}
+  .mapbox svg{min-width:1040px}
+  .map-hint{font-size:10px;margin-top:4px}
+  .pipes{grid-template-columns:1fr 1fr;gap:10px}
+  .pipe{padding:10px 12px}
+  .pipe h3{margin-bottom:8px}
+  .console{grid-template-columns:1fr 250px}
+  .c-side{border-left:1px solid var(--line);border-top:none;
+    display:flex;flex-direction:column;gap:7px;padding:10px 14px}
+  .c-out{min-height:86px;font-size:11.5px;line-height:1.7;padding:10px 14px}
+  .foot{line-height:1.7}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <div class="title">devctx://architecture.map<small>统一上下文协议 · 全景骨架图 v0.5</small></div>
+    <button class="fs-btn" id="fsBtn" aria-label="全屏观看">
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M1 1h5v2H3v3H1V1zm9 0h5v5h-2V3h-3V1zM1 10h2v3h3v2H1v-5zm12 0h2v5h-5v-2h3v-3z" fill="currentColor"/></svg>
+      <span>全屏</span>
+    </button>
+    <div class="tabs">
+      <button class="tab on" data-s="core">功能核心</button>
+      <button class="tab" data-s="onboard">接入流程</button>
+      <button class="tab" data-s="usage">使用流程</button>
+      <button class="tab" data-s="multi">多 Agent 并发</button>
+    </div>
+    <div class="leds">
+      <span><span class="led"></span>agents <b>12</b></span>
+      <span><span class="led"></span>sessions <b>live</b></span>
+    </div>
+  </div>
+
+  <div class="map-wrap">
+    <div class="mapbox">
+      
+<svg id="map" viewBox="0 0 1420 800" xmlns="http://www.w3.org/2000/svg" role="img">
+  <defs>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0 L0 0 0 28" fill="none" stroke="#15202c" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fd8e8" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#4fd8e8" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1420" height="800" fill="url(#grid)"/>
+
+  <!-- ============ root: .ai-dev single source of truth ============ -->
+  <g class="root-node" style="--d:.05s">
+    <rect class="sk card glow-c" x="30" y="330" width="252" height="280" rx="12"/>
+    <text x="48" y="362" class="t-name">.ai-dev/</text>
+    <text x="48" y="384" class="t-title">单一事实源</text>
+    <line x1="48" y1="398" x2="264" y2="398" class="sep"/>
+    <text x="48" y="418" class="t-sub">L0 薄指针 ×12 工具</text>
+    <text x="48" y="438" class="t-sub">L1 START_HERE 每会话必读</text>
+    <text x="48" y="458" class="t-sub">L2 长期记忆 ×6 · 含术语表</text>
+    <text x="48" y="478" class="t-sub">L3 HANDOFF + handoffs/</text>
+    <text x="48" y="498" class="t-sub">specs/ SDD 半成品</text>
+    <text x="48" y="518" class="t-sub">docs/ 一个需求一份文档</text>
+    <text x="48" y="538" class="t-sub">decisions/ ADR · archive/</text>
+    <text x="48" y="562" class="t-sub dim">随 git 走 · 换工具不丢</text>
+    <circle cx="252" cy="352" r="4" class="live-dot"/>
+  </g>
+
+  <!-- ============ feature column ============ -->
+
+  <g class="feat-node f-handoff" style="--d:0.25s">
+    <rect class="sk card" x="352" y="40" width="300" height="62" rx="8"/>
+    <text x="368" y="61" class="t-name">handoffs/ · 每轮压缩</text>
+    <text x="368" y="78" class="t-sub">时间戳+Agent-会话Id+用户原话</text>
+    <text x="368" y="93" class="t-sub dim">Done/Next/Verify/Risks/Intent</text>
+  </g>
+
+  <g class="feat-node f-intake" style="--d:0.35s">
+    <rect class="sk card" x="352" y="114" width="300" height="62" rx="8"/>
+    <text x="368" y="135" class="t-name">intake · 需求受理</text>
+    <text x="368" y="152" class="t-sub">四类证据：开放Next/specs/DOCS</text>
+    <text x="368" y="167" class="t-sub dim">NEW·EXTEND·CONTINUE·FIX·CORRECTION</text>
+  </g>
+
+  <g class="feat-node f-docs" style="--d:0.45s">
+    <rect class="sk card" x="352" y="188" width="300" height="62" rx="8"/>
+    <text x="368" y="209" class="t-name">docs/ · 文档治理</text>
+    <text x="368" y="226" class="t-sub">一个需求只对应一份文档</text>
+    <text x="368" y="241" class="t-sub dim">DOCS.md 登记 · 未登记=错误级</text>
+  </g>
+
+  <g class="feat-node f-specs" style="--d:0.55s">
+    <rect class="sk card" x="352" y="262" width="300" height="62" rx="8"/>
+    <text x="368" y="283" class="t-name">specs/ · 规格驱动 SDD</text>
+    <text x="368" y="300" class="t-sub">spec→plan→tasks→implement</text>
+    <text x="368" y="315" class="t-sub dim">半成品自动 spec 化 · 勾选算进度</text>
+  </g>
+
+  <g class="feat-node f-code" style="--d:0.65s">
+    <rect class="sk card" x="352" y="336" width="300" height="62" rx="8"/>
+    <text x="368" y="357" class="t-name">code-index · 代码地图</text>
+    <text x="368" y="374" class="t-sub">只读目标文件，禁止全仓扫描</text>
+    <text x="368" y="389" class="t-sub dim">尊重 .gitignore 与 ignore.conf</text>
+  </g>
+
+  <g class="feat-node f-retrofit" style="--d:0.75s">
+    <rect class="sk card" x="352" y="410" width="300" height="62" rx="8"/>
+    <text x="368" y="431" class="t-name">retrofit · 存量接入</text>
+    <text x="368" y="448" class="t-sub">scan 会话画像→baseline 回填</text>
+    <text x="368" y="463" class="t-sub dim">consolidate 文档归并登记</text>
+  </g>
+
+  <g class="feat-node f-sync" style="--d:0.8500000000000001s">
+    <rect class="sk card" x="352" y="484" width="300" height="62" rx="8"/>
+    <text x="368" y="505" class="t-name">sync_rules · 薄指针</text>
+    <text x="368" y="522" class="t-sub">12 种工具指针统一生成</text>
+    <text x="368" y="537" class="t-sub dim">手写规则只注入标记块，绝不覆盖</text>
+  </g>
+
+  <g class="feat-node f-mem" style="--d:0.9500000000000001s">
+    <rect class="sk card" x="352" y="558" width="300" height="62" rx="8"/>
+    <text x="368" y="579" class="t-name">L2 · 长期记忆</text>
+    <text x="368" y="596" class="t-sub">brief/arch/conventions/glossary</text>
+    <text x="368" y="611" class="t-sub dim">术语表 + lessons 永久教训</text>
+  </g>
+
+  <g class="feat-node f-adr" style="--d:1.05s">
+    <rect class="sk card" x="352" y="632" width="300" height="62" rx="8"/>
+    <text x="368" y="653" class="t-name">decisions/ · ADR</text>
+    <text x="368" y="670" class="t-sub">难以逆转的选型才记录</text>
+    <text x="368" y="685" class="t-sub dim">背景/备选/决策/后果，只记为什么</text>
+  </g>
+
+  <g class="feat-node f-doctor" style="--d:1.15s">
+    <rect class="sk card" x="352" y="706" width="300" height="62" rx="8"/>
+    <text x="368" y="727" class="t-name">doctor/archive · 防腐</text>
+    <text x="368" y="744" class="t-sub">15 项体检 · --fix 自愈</text>
+    <text x="368" y="759" class="t-sub dim">超限归档，活跃窗口绝不触碰</text>
+  </g>
+
+  <!-- ============ edges ============ -->
+<path class="sk edge e-root" style="--d:0.15s" d="M282 470 C 320 470 320 71 352 71"/>
+<path class="sk edge e-feed" style="--d:0.5s" d="M652 71 C 672 71 672 71 690 71"/>
+<path class="sk edge e-root" style="--d:0.21s" d="M282 470 C 320 470 320 145 352 145"/>
+<path class="sk edge e-feed" style="--d:0.56s" d="M652 145 C 672 145 672 145 690 145"/>
+<path class="sk edge e-root" style="--d:0.27s" d="M282 470 C 320 470 320 219 352 219"/>
+<path class="sk edge e-feed" style="--d:0.62s" d="M652 219 C 672 219 672 219 690 219"/>
+<path class="sk edge e-root" style="--d:0.32999999999999996s" d="M282 470 C 320 470 320 293 352 293"/>
+<path class="sk edge e-feed" style="--d:0.6799999999999999s" d="M652 293 C 672 293 672 293 690 293"/>
+<path class="sk edge e-root" style="--d:0.39s" d="M282 470 C 320 470 320 367 352 367"/>
+<path class="sk edge e-feed" style="--d:0.74s" d="M652 367 C 672 367 672 367 690 367"/>
+<path class="sk edge e-root" style="--d:0.44999999999999996s" d="M282 470 C 320 470 320 441 352 441"/>
+<path class="sk edge e-feed" style="--d:0.8s" d="M652 441 C 672 441 672 441 690 441"/>
+<path class="sk edge e-root" style="--d:0.51s" d="M282 470 C 320 470 320 515 352 515"/>
+<path class="sk edge e-feed" style="--d:0.86s" d="M652 515 C 672 515 672 515 690 515"/>
+<path class="sk edge e-root" style="--d:0.57s" d="M282 470 C 320 470 320 589 352 589"/>
+<path class="sk edge e-feed" style="--d:0.9199999999999999s" d="M652 589 C 672 589 672 589 690 589"/>
+<path class="sk edge e-root" style="--d:0.63s" d="M282 470 C 320 470 320 663 352 663"/>
+<path class="sk edge e-feed" style="--d:0.98s" d="M652 663 C 672 663 672 663 690 663"/>
+<path class="sk edge e-root" style="--d:0.6900000000000001s" d="M282 470 C 320 470 320 737 352 737"/>
+<path class="sk edge e-feed" style="--d:1.04s" d="M652 737 C 672 737 672 737 690 737"/>
+
+  <!-- ============ handoffs bus (hub) ============ -->
+  <g class="bus-node" style="--d:.9s">
+    <rect class="sk card dashed" x="690" y="26" width="272" height="748" rx="14"/>
+    <text x="826" y="52" class="t-name" text-anchor="middle">handoffs/ 流水</text>
+
+    <rect class="sk card inner" x="706" y="66" width="240" height="120" rx="8"/>
+    <text x="722" y="90" class="t-title">INDEX.md</text>
+    <text x="722" y="110" class="t-sub">一行一条 · 原子重建</text>
+    <text x="722" y="128" class="t-sub">开放 Next 计数</text>
+    <text x="722" y="146" class="t-sub dim">换 Agent 读一个索引即恢复</text>
+    <text x="722" y="170" class="t-sub dim">记录 128 · 开放 7</text>
+
+    <line x1="826" y1="200" x2="826" y2="600" class="sk bus-line"/>
+    <text x="826" y="230" class="t-sub dim" text-anchor="middle">一条记录一个文件</text>
+    <text x="826" y="248" class="t-sub dim" text-anchor="middle">只增不改 · 并发写不覆盖</text>
+
+    <g id="stream-layer"></g>
+
+    <rect class="sk card inner" x="706" y="612" width="240" height="140" rx="8"/>
+    <text x="722" y="636" class="t-title">DOCS.md</text>
+    <text x="722" y="656" class="t-sub">唯一登记索引</text>
+    <text x="722" y="674" class="t-sub">未登记文档 = 错误级</text>
+    <text x="722" y="692" class="t-sub dim">一个需求一份文档</text>
+    <text x="722" y="716" class="t-sub dim">主题重复 → 合并</text>
+    <text x="722" y="738" class="t-sub dim">关联记录数自动算</text>
+  </g>
+
+  <!-- ============ agent column ============ -->
+  <g class="agents-node">
+    <text x="1005" y="30" class="t-name">AGENTS · 12 工具并发</text>
+
+  <g class="agent-node" data-agent="Claude Code" style="--d:0.0s">
+    <rect class="sk card" x="1005" y="44" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#e8916d">
+      <circle cx="1032" cy="67" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,56) scale(0.92)"><svg width="22" height="22" style="fill:currentColor" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Claude</title><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></g>
+    </g>
+    <text x="1058" y="64" class="t-label">Claude Code</text>
+    <text x="1058" y="79" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="67" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Cursor" style="--d:0.12s">
+    <rect class="sk card" x="1005" y="101" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#e8eef5">
+      <circle cx="1032" cy="124" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,113) scale(0.92)"><svg width="22" height="22" style="fill:currentColor" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Cursor</title><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></svg></g>
+    </g>
+    <text x="1058" y="121" class="t-label">Cursor</text>
+    <text x="1058" y="136" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="124" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Windsurf" style="--d:0.24s">
+    <rect class="sk card" x="1005" y="158" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#3ecfaf">
+      <circle cx="1032" cy="181" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,170) scale(0.92)"><svg width="22" height="22" style="fill:currentColor" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Windsurf</title><path d="M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z"/></svg></g>
+    </g>
+    <text x="1058" y="178" class="t-label">Windsurf</text>
+    <text x="1058" y="193" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="181" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Trae" style="--d:0.36s">
+    <rect class="sk card" x="1005" y="215" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#6b9cff">
+      <circle cx="1032" cy="238" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,227) scale(0.92)"><svg width="22" height="22" fill="currentColor" fill-rule="evenodd" style="flex:none;line-height:1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>TRAE</title><path d="M24 20.541H3.428v-3.426H0V3.4h24V20.54zM3.428 17.115h17.144V6.827H3.428v10.288zm8.573-5.196l-2.425 2.424-2.424-2.424 2.424-2.424 2.425 2.424zm6.857-.001l-2.424 2.423-2.425-2.423 2.425-2.425 2.424 2.425z"></path></svg></g>
+    </g>
+    <text x="1058" y="235" class="t-label">Trae</text>
+    <text x="1058" y="250" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="238" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="GitHub Copilot" style="--d:0.48s">
+    <rect class="sk card" x="1005" y="272" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#c9d6e3">
+      <circle cx="1032" cy="295" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,284) scale(0.92)"><svg width="22" height="22" style="fill:currentColor" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>GitHub Copilot</title><path d="M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z"/></svg></g>
+    </g>
+    <text x="1058" y="292" class="t-label">GitHub Copilot</text>
+    <text x="1058" y="307" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="295" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Cline" style="--d:0.6s">
+    <rect class="sk card" x="1005" y="329" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#4cc38a">
+      <circle cx="1032" cy="352" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,341) scale(0.92)"><svg width="22" height="22" style="fill:currentColor" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Cline</title><path d="m23.365 13.556-1.442-2.895V8.994c0-2.764-2.218-5.002-4.954-5.002h-2.464c.178-.367.276-.779.276-1.213A2.77 2.77 0 0 0 12.018 0a2.77 2.77 0 0 0-2.763 2.779c0 .434.098.846.276 1.213H7.067c-2.736 0-4.954 2.238-4.954 5.002v1.667L.64 13.549c-.149.29-.149.636 0 .927l1.472 2.855v1.667C2.113 21.762 4.33 24 7.067 24h9.902c2.736 0 4.954-2.238 4.954-5.002V17.33l1.44-2.865c.143-.286.143-.622.002-.91m-12.854 2.36a2.27 2.27 0 0 1-2.261 2.273 2.27 2.27 0 0 1-2.261-2.273v-4.042A2.27 2.27 0 0 1 8.249 9.6a2.267 2.267 0 0 1 2.262 2.274zm7.285 0a2.27 2.27 0 0 1-2.26 2.273 2.27 2.27 0 0 1-2.262-2.273v-4.042A2.267 2.267 0 0 1 15.535 9.6a2.267 2.267 0 0 1 2.261 2.274z"/></svg></g>
+    </g>
+    <text x="1058" y="349" class="t-label">Cline</text>
+    <text x="1058" y="364" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="352" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Roo Code" style="--d:0.72s">
+    <rect class="sk card" x="1005" y="386" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#9b8cf7">
+      <circle cx="1032" cy="409" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,398) scale(0.92)"><?xml version="1.0" encoding="UTF-8"?>
+<svg width="22" height="22" style="fill:currentColor" id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:i="http://ns.adobe.com/AdobeIllustrator/10.0/" version="1.1" viewBox="0 0 96 96">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: currentColor;
+        stroke-width: 0px;
+      }
+    </style>
+  </defs>
+  <path class="cls-1" d="M78.99,21.9l-1.73,6.24c-.09.33-.44.52-.77.42l-28.11-8.71c-.19-.06-.41-.02-.56.11l-28.95,23.22c-.08.07-.18.11-.29.13l-17.25,2.66c-.31.05-.53.32-.52.63l.11,2.47c.01.31.26.56.57.58l20.08,1.23c.11,0,.22-.02.31-.06l14.64-7.4c.21-.11.46-.08.64.06l9.37,7.03c.16.12.25.3.24.49l-.09,11.65c0,.13.04.25.11.35l14.74,21.15c.11.16.3.26.5.26h5.03c.46,0,.76-.5.54-.9l-10.87-19.92c-.1-.18-.1-.4,0-.58l5.51-10.48c.06-.11.15-.2.26-.26l19.56-9.92c.2-.1.43-.09.62.04l5.6,3.73c.1.07.22.1.34.1h5.15c.48,0,.77-.52.52-.93l-14.2-23.52c-.28-.46-.97-.36-1.11.15Z"/>
+</svg></g>
+    </g>
+    <text x="1058" y="406" class="t-label">Roo Code</text>
+    <text x="1058" y="421" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="409" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Continue" style="--d:0.84s">
+    <rect class="sk card" x="1005" y="443" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#c9d6e3">
+      <circle cx="1032" cy="466" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,455) scale(0.92)"><image class="png" href="data:image/png;base64,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" x="0" y="0" width="22" height="22" preserveAspectRatio="xMidYMid meet"/></g>
+    </g>
+    <text x="1058" y="463" class="t-label">Continue</text>
+    <text x="1058" y="478" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="466" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Aider" style="--d:0.96s">
+    <rect class="sk card" x="1005" y="500" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#4ec9b0">
+      <circle cx="1032" cy="523" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,512) scale(0.92)"><image class="png" href="data:image/png;base64,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" x="0" y="0" width="22" height="22" preserveAspectRatio="xMidYMid meet"/></g>
+    </g>
+    <text x="1058" y="520" class="t-label">Aider</text>
+    <text x="1058" y="535" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="523" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Gemini CLI" style="--d:1.08s">
+    <rect class="sk card" x="1005" y="557" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#8ab4f8">
+      <circle cx="1032" cy="580" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,569) scale(0.92)"><svg width="22" height="22" style="fill:currentColor" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Google Gemini</title><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg></g>
+    </g>
+    <text x="1058" y="577" class="t-label">Gemini CLI</text>
+    <text x="1058" y="592" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="580" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="Codex" style="--d:1.2s">
+    <rect class="sk card" x="1005" y="614" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#74aa9c">
+      <circle cx="1032" cy="637" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,626) scale(0.92)"><svg width="22" height="22" style="fill:currentColor" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>OpenAI</title><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg></g>
+    </g>
+    <text x="1058" y="634" class="t-label">Codex</text>
+    <text x="1058" y="649" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="637" r="4" class="live-dot"/>
+  </g>
+
+  <g class="agent-node" data-agent="豆包" style="--d:1.3199999999999998s">
+    <rect class="sk card" x="1005" y="671" width="385" height="46" rx="8"/>
+    <g class="ico-zone" style="color:#7aa5ff">
+      <circle cx="1032" cy="694" r="15" class="ico-bubble"/>
+      <g class="ico-wrap" transform="translate(1021,683) scale(0.92)"><svg width="22" height="22" fill="currentColor" fill-rule="evenodd" style="flex:none;line-height:1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>Doubao</title><path d="M5.31 15.756c.172-3.75 1.883-5.999 2.549-6.739-3.26 2.058-5.425 5.658-6.358 8.308v1.12C1.501 21.513 4.226 24 7.59 24a6.59 6.59 0 002.2-.375c.353-.12.7-.248 1.039-.378.913-.899 1.65-1.91 2.243-2.992-4.877 2.431-7.974.072-7.763-4.5l.002.001z" fill-opacity=".5"></path><path d="M22.57 10.283c-1.212-.901-4.109-2.404-7.397-2.8.295 3.792.093 8.766-2.1 12.773a12.782 12.782 0 01-2.244 2.992c3.764-1.448 6.746-3.457 8.596-5.219 2.82-2.683 3.353-5.178 3.361-6.66a2.737 2.737 0 00-.216-1.084v-.002zM14.303 1.867C12.955.7 11.248 0 9.39 0 7.532 0 5.883.677 4.545 1.807 2.791 3.29 1.627 5.557 1.5 8.125v9.201c.932-2.65 3.097-6.25 6.357-8.307.5-.318 1.025-.595 1.569-.829 1.883-.801 3.878-.932 5.746-.706-.222-2.83-.718-5.002-.87-5.617h.001z"></path><path d="M17.305 4.961a199.47 199.47 0 01-1.08-1.094c-.202-.213-.398-.419-.586-.622l-1.333-1.378c.151.615.648 2.786.869 5.617 3.288.395 6.185 1.898 7.396 2.8-1.306-1.275-3.475-3.487-5.266-5.323z" fill-opacity=".5"></path></svg></g>
+    </g>
+    <text x="1058" y="691" class="t-label">豆包</text>
+    <text x="1058" y="706" class="t-sub">薄指针 → .ai-dev/</text>
+    <circle cx="1380" cy="694" r="4" class="live-dot"/>
+  </g>
+  </g>
+  <g class="concurrency-node" style="--d:1.6s">
+    <rect class="sk card dashed" x="1005" y="726" width="385" height="46" rx="8"/>
+    <text x="1021" y="745" class="t-sub">并发安全：INDEX 原子重建 + 文件锁</text>
+    <text x="1021" y="761" class="t-sub dim">同秒同身份写入自动加序号 · 实测 0 丢失</text>
+  </g>
+
+  <!-- ============ pulses ============ -->
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="2.2s" begin="0.0s" repeatCount="indefinite" path="M1005 67 C 960 67 900 67 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="2.7s" begin="0.35s" repeatCount="indefinite" path="M1005 124 C 960 124 900 124 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="3.2s" begin="0.7s" repeatCount="indefinite" path="M1005 181 C 960 181 900 181 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="3.7s" begin="1.0499999999999998s" repeatCount="indefinite" path="M1005 238 C 960 238 900 238 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="2.2s" begin="1.4s" repeatCount="indefinite" path="M1005 295 C 960 295 900 295 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="2.7s" begin="1.75s" repeatCount="indefinite" path="M1005 352 C 960 352 900 352 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="3.2s" begin="2.0999999999999996s" repeatCount="indefinite" path="M1005 409 C 960 409 900 409 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="3.7s" begin="2.4499999999999997s" repeatCount="indefinite" path="M1005 466 C 960 466 900 466 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="2.2s" begin="2.8s" repeatCount="indefinite" path="M1005 523 C 960 523 900 523 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="2.7s" begin="3.15s" repeatCount="indefinite" path="M1005 580 C 960 580 900 580 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="3.2s" begin="3.5s" repeatCount="indefinite" path="M1005 637 C 960 637 900 637 862 400"/>
+  </circle>
+  <circle r="3.2" class="pulse p-agent">
+    <animateMotion dur="3.7s" begin="3.8499999999999996s" repeatCount="indefinite" path="M1005 694 C 960 694 900 694 862 400"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="1.8s" begin="0.4s" repeatCount="indefinite" path="M690 71 C 740 71 780 71 820 71"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="2.2s" begin="0.68s" repeatCount="indefinite" path="M690 145 C 740 145 780 145 820 145"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="2.6s" begin="0.9600000000000001s" repeatCount="indefinite" path="M690 219 C 740 219 780 219 820 219"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="1.8s" begin="1.2400000000000002s" repeatCount="indefinite" path="M690 293 C 740 293 780 293 820 293"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="2.2s" begin="1.52s" repeatCount="indefinite" path="M690 367 C 740 367 780 367 820 367"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="2.6s" begin="1.8000000000000003s" repeatCount="indefinite" path="M690 441 C 740 441 780 441 820 441"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="1.8s" begin="2.08s" repeatCount="indefinite" path="M690 515 C 740 515 780 515 820 515"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="2.2s" begin="2.3600000000000003s" repeatCount="indefinite" path="M690 589 C 740 589 780 589 820 589"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="2.6s" begin="2.64s" repeatCount="indefinite" path="M690 663 C 740 663 780 663 820 663"/>
+  </circle>
+  <circle r="2.6" class="pulse p-feed">
+    <animateMotion dur="1.8s" begin="2.9200000000000004s" repeatCount="indefinite" path="M690 737 C 740 737 780 737 820 737"/>
+  </circle>
+</svg>
+
+      <div class="scanline"></div>
+      <div class="scanbeam"></div>
+    </div>
+    <div class="rotate-hint" id="rotateHint">
+      <div class="rh-box">
+        <div class="rh-ico">
+          <svg viewBox="0 0 48 48" width="46" height="46" aria-hidden="true">
+            <rect x="15" y="7" width="18" height="34" rx="3.5" fill="none" stroke="#4fd8e8" stroke-width="1.5"/>
+            <line x1="21" y1="11.5" x2="27" y2="11.5" stroke="#4fd8e8" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M39 22 A13 13 0 0 1 41 32" fill="none" stroke="#4fd8e8" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M41 25.5 L41 33 L33.5 32.5" fill="none" stroke="#4fd8e8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <b>横屏观看更佳</b>
+        <small>骨架图是宽幅版式 · 旋转手机即刻看到完整全景与全部连线</small>
+        <button class="rh-btn rh-primary" id="rhGo">横屏全屏观看</button>
+        <button class="rh-btn rh-ghost" id="rhDismiss">仍要竖屏浏览</button>
+      </div>
+    </div>
+  </div>
+  <div class="map-hint">骨架图按宽屏绘制 · 横屏观看更佳，竖屏可左右滑动 + 双指缩放</div>
+
+  <div class="pipes">
+    <div class="pipe">
+      <h3>接入流程<span>存量多 Agent 项目 · retrofit</span></h3>
+      <div class="steps pipe-onboard">
+        <div class="step"><span class="n">1</span><b>retrofit scan</b><small>git 历史 → 会话画像</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">2</span><b>retrofit plan</b><small>输出接入顺序</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">3</span><b>init</b><small>.ai-dev/ + 索引 + 指针 + specs/</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">4</span><b>baseline ×N</b><small>历史会话回填记录</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">5</span><b>consolidate</b><small>存量文档归并登记</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">6</span><b>sync --inject</b><small>指针不覆盖手写</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">7</span><b>doctor --fix</b><small>清零后交付</small></div>
+      </div>
+    </div>
+    <div class="pipe">
+      <h3>使用流程<span>每轮对话循环 · 不等大任务完成</span></h3>
+      <div class="steps pipe-usage">
+        <div class="step"><span class="n">1</span><b>resume</b><small>读 START_HERE+HANDOFF+INDEX</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">2</span><b>intake 受理</b><small>四类证据裁定改/建</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">3</span><b>开发</b><small>code-index 定位 · 可选 spec 全链</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">4</span><b>handoff</b><small>追加压缩记录+Intent</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">5</span><b>滚动 HANDOFF</b><small>最新结论并进去</small></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="n">6</span><b>archive/doctor</b><small>超限归档 · 体检防腐</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="console">
+    <div class="c-out"></div>
+    <div class="c-side">
+      <div class="metric"><span>handoff 记录</span><b id="m-rec">128</b></div>
+      <div class="metric"><span>开放 Next</span><b id="m-open">7</b></div>
+      <div class="metric"><span>需求文档</span><b id="m-doc">9</b></div>
+      <div class="metric"><span>工具指针</span><b>12</b></div>
+      <div class="metric"><span>并发写入</span><b style="color:var(--gr)">0 丢失</b></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    脚本（AI 调用，用户零命令）：
+    <code>init_project.py</code> <code>retrofit.py scan|plan|baseline|consolidate</code>
+    <code>doc_registry.py --intake</code> <code>log_handoff.py</code>
+    <code>build_index.py</code> <code>sync_rules.py</code> <code>archive_handoff.py</code> <code>doctor.py</code>
+    · 纯 Python 标准库 · 59 项测试 · 深色骨架图实时演示 handoffs/ 流水写入
+  </div>
+</div>
+<script>
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const map=$('#map');
+/* ---------- section focus ---------- */
+const SECTIONS={
+  core:{feat:[1,1,1,1,1,1,1,1,1,1],root:1,bus:1,agent:0,
+    text:()=>'<span class="ps1">devctx$</span> 核心 = <span class="k">.ai-dev/ 单一事实源</span>\n'+
+      '十个功能模块挂同一棵树：<span class="k">handoffs/</span> 治失忆，<span class="k">intake</span> 治漂移，<span class="k">docs/</span> 治文档泛滥，\n'+
+      '<span class="k">specs/</span> 把需求变规格再实现（SDD），<span class="k">code-index</span> 治全仓扫描，<span class="k">retrofit</span> 治存量接入，\n'+
+      '<span class="k">sync</span> 治规则重复，<span class="k">L2 记忆</span>（glossary 术语表 / lessons）治业务黑话，<span class="k">decisions</span> 治选型失据，<span class="k">doctor</span> 治腐化。\n'+
+      '<span class="d">新会话只读 L1+L3，约 1k token 恢复现场。</span>'},
+  onboard:{feat:[1,0,1,1,1,1,1,1,0,1],root:1,bus:1,agent:0,
+    text:()=>'<span class="ps1">devctx$</span> 存量项目接入 = <span class="w">retrofit</span>\n'+
+      '<span class="k">scan</span> 把 git 历史按「作者×时间窗」切成历史会话画像 → <span class="k">baseline</span> 逐个回填记录\n'+
+      '（"压缩各会话 Id"）→ <span class="k">consolidate</span> 存量文档归并登记 → <span class="k">sync</span> 指针 → <span class="k">doctor</span> 清零交付。\n'+
+      '<span class="d">init 时顺手把 TODO/FIXME 半成品 spec 化；口述历史同样回填，禁止编造。</span>'},
+  usage:{feat:[1,1,1,1,1,0,0,1,1,1],root:1,bus:1,agent:0,
+    text:()=>'<span class="ps1">devctx$</span> 每轮使用流程\n'+
+      '<span class="k">resume</span> 读 START_HERE+HANDOFF+INDEX → <span class="k">intake</span> 四类证据裁定改/建 → 按 code-index 只读目标文件\n'+
+      '→ 说"用 spec 做 XXX"自动跑 <span class="k">spec→plan→tasks→implement</span> → <span class="k">handoff</span> 每轮结束追加压缩记录 → 滚动 HANDOFF.md。\n'+
+      '<span class="d">难逆转选型补 ADR；每轮都写，不等大任务完成——这是换 Agent 不丢上下文的关键。</span>'},
+  multi:{feat:[1,0,0,0,0,0,1,0,0,1],root:1,bus:1,agent:1,
+    text:()=>'<span class="ps1">devctx$</span> 多 Agent / 多会话并发\n'+
+      '12 种工具经薄指针汇入同一 <span class="k">.ai-dev/</span>：各写各的记录文件，永不互相覆盖；\n'+
+      'INDEX.md <span class="k">临时文件+原子替换+文件锁</span> 重建；同秒同身份写入自动加序号；\n'+
+      '<span class="k">HANDOFF.md</span> 是唯一共享黑板，先读「开放 Next」再动手避免撞车。'},
+};
+let tourTimer=null,touring=true,cur='core';
+function focus(name){
+  cur=name;const s=SECTIONS[name];
+  $$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===name));
+  const feats=$$('.feat-node');
+  feats.forEach((f,i)=>{f.classList.toggle('on',!!s.feat[i]);});
+  $('.root-node').classList.toggle('on',!!s.root);
+  $('.bus-node').classList.toggle('on',!!s.bus);
+  $$('.agent-node').forEach(a=>a.classList.toggle('on',!!s.agent));
+  const dim=(!s.feat.every(Boolean))||!s.root||!s.agent;
+  map.classList.toggle('focus-dim',dim);
+  typeText($('.c-out'),s.text());
+  lightPipe(name);
+}
+/* ---------- typing effect ---------- */
+let typeTimer=null;
+function typeText(el,html){
+  clearTimeout(typeTimer);
+  const tmp=document.createElement('div');tmp.innerHTML=html;
+  const nodes=[...tmp.childNodes];el.innerHTML='';
+  let ni=0,ci=0;
+  (function step(){
+    if(ni>=nodes.length)return;
+    const n=nodes[ni];
+    if(n.nodeType===3){
+      const t=n.textContent;if(ci<t.length){n.textContent=t.slice(0,++ci);
+        if(!el.contains(n))el.appendChild(n);
+        typeTimer=setTimeout(step,14);return;}
+      el.appendChild(n);ni++;ci=0;typeTimer=setTimeout(step,10);return;}
+    el.appendChild(n);ni++;ci=0;typeTimer=setTimeout(step,10);
+  })();
+}
+/* ---------- pipeline lighting ---------- */
+function lightPipe(name){
+  $$('.step').forEach(st=>st.classList.remove('lit'));
+  if(name==='onboard'){seq('.pipe-onboard .step');}
+  else if(name==='usage'){seq('.pipe-usage .step');}
+}
+function seq(sel){
+  const els=$$(sel);let i=0;
+  (function nxt(){if(i>0)els[i-1].classList.remove('lit');
+    if(i>=els.length){i=0;setTimeout(nxt,500);return;}
+    els[i].classList.add('lit');i++;setTimeout(nxt,900);})();
+}
+/* ---------- tabs + auto tour ---------- */
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{touring=false;clearInterval(tourTimer);focus(t.dataset.s);}));
+const rhDismiss=document.getElementById('rhDismiss');
+if(rhDismiss)rhDismiss.addEventListener('click',()=>{
+  document.getElementById('rotateHint').classList.add('dismissed');});
+/* ---------- fullscreen + landscape lock ---------- */
+const fsBtn=document.getElementById('fsBtn');
+const fsEl=document.documentElement;
+function fsActive(){return !!(document.fullscreenElement||document.webkitFullscreenElement);}
+async function fsEnter(){
+  try{
+    if(fsEl.requestFullscreen) await fsEl.requestFullscreen({navigationUI:'hide'});
+    else if(fsEl.webkitRequestFullscreen) fsEl.webkitRequestFullscreen();
+    try{await screen.orientation.lock('landscape');}catch(e){}
+  }catch(e){/* denied / unsupported (iOS Safari) → degrade gracefully */}
+}
+function fsExit(){
+  try{
+    if(document.exitFullscreen) document.exitFullscreen();
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }catch(e){}
+}
+if(fsBtn)fsBtn.addEventListener('click',()=>{fsActive()?fsExit():fsEnter();});
+function fsSync(){
+  if(!fsBtn)return;
+  fsBtn.classList.toggle('on',fsActive());
+  fsBtn.querySelector('span').textContent=fsActive()?'退出':'全屏';
+  document.body.classList.toggle('fs-on',fsActive());
+}
+document.addEventListener('fullscreenchange',fsSync);
+document.addEventListener('webkitfullscreenchange',fsSync);
+/* portrait overlay primary action: fullscreen + lock landscape (phone auto-rotates) */
+const rhGo=document.getElementById('rhGo');
+if(rhGo)rhGo.addEventListener('click',async()=>{
+  await fsEnter();
+  document.getElementById('rotateHint').classList.add('dismissed');
+});
+/* rotated to landscape: best-effort auto fullscreen (only fires with recent user gesture) */
+window.addEventListener('orientationchange',()=>{
+  setTimeout(()=>{
+    if(window.matchMedia('(orientation:landscape)').matches && !fsActive()
+       && navigator.userActivation && navigator.userActivation.isActive){fsEnter();}
+  },350);
+});
+function tour(){clearInterval(tourTimer);
+  tourTimer=setInterval(()=>{const ks=Object.keys(SECTIONS);
+    focus(ks[(ks.indexOf(cur)+1)%ks.length]);},10500);}
+/* ---------- handoff stream chips ---------- */
+const AG=['claude-code','cursor','windsurf','trae','copilot','cline','roo','continue','aider','gemini','codex','doubao'];
+const SESS=['a1b2c3d4','e5f6a7b8','c9d0e1f2','b3a4c5d6','f1e2d3c4','0a9b8c7d'];
+const layer=$('#stream-layer');
+let recCount=128,openNext=7,docCount=9;
+function chip(){
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  const y=210+Math.random()*360;
+  const ag=AG[Math.floor(Math.random()*AG.length)];
+  const se=SESS[Math.floor(Math.random()*SESS.length)];
+  const op=Math.random()<.4;
+  g.setAttribute('class','chipg');
+  g.innerHTML=`<rect class="chip" x="700" y="${y}" width="252" height="34" rx="6"/>
+    <text class="chip-t" x="710" y="${y+14}">${ag} · ${se}</text>
+    <text class="chip-t" x="710" y="${y+27}" style="fill:${op?'#f2cc60':'#7ee787'}">${op?'open Next +1':'done ✓'}</text>`;
+  layer.appendChild(g);
+  const anim=g.animate([{opacity:0,transform:'translateX(26px)'},{opacity:1,transform:'translateX(0)',offset:.15},
+    {opacity:1,transform:'translateX(0)',offset:.8},{opacity:0,transform:'translateX(-14px)'}],
+    {duration:2600,easing:'ease'});
+  anim.onfinish=()=>g.remove();
+  recCount++;if(op)openNext++;else openNext=Math.max(0,openNext-1);
+  bump();
+}
+function bump(){
+  $('#m-rec').textContent=recCount;
+  $('#m-open').textContent=openNext;
+  $('#m-doc').textContent=docCount;
+  $('#m-rec').classList.add('up');setTimeout(()=>$('#m-rec').classList.remove('up'),400);
+}
+/* ---------- boot ---------- */
+focus('core');tour();setInterval(chip,1500);
+setTimeout(chip,600);setTimeout(chip,1200);
+</script>
+</body>
+</html>
