@@ -12,9 +12,11 @@ throwaway project in a temp dir so the suite never touches real repos.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -33,7 +35,29 @@ import doctor  # noqa: E402
 import init_project  # noqa: E402
 import doc_registry  # noqa: E402
 import sync_rules  # noqa: E402
+import retrofit  # noqa: E402
 from _common import match_ignore  # noqa: E402
+
+
+def _isolated_env(home: Path) -> dict[str, str]:
+    """Point every home/appdata lookup at a throwaway dir.
+
+    A HOME-only override leaks the real user's stores: the probe resolves
+    Path.home() via USERPROFILE on Windows and editor stores via APPDATA.
+    """
+    return {**os.environ, "HOME": str(home),
+            "USERPROFILE": str(home), "APPDATA": str(home)}
+
+
+def _force_rmtree(path: Path) -> None:
+    """rmtree that survives git's read-only object files on Windows."""
+    for root, dirs, files in os.walk(path):
+        for name in (*dirs, *files):
+            try:
+                os.chmod(os.path.join(root, name), stat.S_IWRITE)
+            except OSError:
+                pass
+    shutil.rmtree(path)
 
 
 class ProjectFixture(unittest.TestCase):
@@ -772,7 +796,7 @@ class TestRetrofit(unittest.TestCase):
         self.assertIn("2 处", r.stdout)          # TODO + FIXME
 
     def test_scan_without_git_is_graceful(self) -> None:
-        shutil.rmtree(self.tmp / ".git")
+        _force_rmtree(self.tmp / ".git")
         r = self.run_script("scan")
         self.assertEqual(r.returncode, 0)
         self.assertIn("不是 git 仓库", r.stdout)
@@ -929,20 +953,21 @@ class TestProbe(unittest.TestCase):
         (self.tmp / "src" / "app.py").write_text('"""app"""\n', encoding="utf-8")
 
     def run_probe(self) -> subprocess.CompletedProcess:
-        env = {**os.environ, "HOME": str(self.home)}
+        env = _isolated_env(self.home)
         return subprocess.run(
             [sys.executable, str(SCRIPTS / "retrofit.py"), str(self.tmp), "probe"],
             capture_output=True, text=True, encoding="utf-8", env=env,
         )
 
     def _claude_session(self, sid: str, day: str, cwd: str | None = None) -> None:
-        enc = str(cwd or self.tmp).replace("/", "-")
+        # 用实现同一个编码器：只换 "/" 在 Windows 上会把 "C:\..." 当成多级目录名
+        enc = retrofit._claude_encoded(cwd or self.tmp)
         d = self.home / ".claude" / "projects" / enc
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{sid}.jsonl").write_text(
-            '{"sessionId":"%s","cwd":"%s","timestamp":"2026-10-%sT10:00:00.000Z"}\n'
+            '{"sessionId":"%s","cwd":%s,"timestamp":"2026-10-%sT10:00:00.000Z"}\n'
             '{"role":"user","content":"这是消息正文，不许被探测读走"}\n'
-            % (sid, cwd or self.tmp, day),
+            % (sid, json.dumps(str(cwd or self.tmp)), day),
             encoding="utf-8")
 
     def test_probe_finds_claude_sessions_scoped(self) -> None:
@@ -966,8 +991,8 @@ class TestProbe(unittest.TestCase):
         d = self.home / ".claude" / "projects" / "weird-encoding-xyz"
         d.mkdir(parents=True)
         (d / "cafe1234.jsonl").write_text(
-            '{"sessionId":"cafe1234","cwd":"%s","timestamp":"2026-10-12T10:00:00.000Z"}\n'
-            % str(self.tmp), encoding="utf-8")
+            '{"sessionId":"cafe1234","cwd":%s,"timestamp":"2026-10-12T10:00:00.000Z"}\n'
+            % json.dumps(str(self.tmp)), encoding="utf-8")
         r = self.run_probe()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("cafe1234", r.stdout)
@@ -989,7 +1014,7 @@ class TestProbe(unittest.TestCase):
 
     def test_plan_surfaces_probe_findings(self) -> None:
         self._claude_session("a1b2c3d4", "11")
-        env = {**os.environ, "HOME": str(self.home)}
+        env = _isolated_env(self.home)
         r = subprocess.run(
             [sys.executable, str(SCRIPTS / "retrofit.py"), str(self.tmp), "plan"],
             capture_output=True, text=True, encoding="utf-8", env=env,
@@ -1002,7 +1027,7 @@ class TestProbe(unittest.TestCase):
     # ---- doctor 集成：本机会话证据驱动指针补齐 ----
 
     def run_doctor(self, *extra: str) -> subprocess.CompletedProcess:
-        env = {**os.environ, "HOME": str(self.home)}
+        env = _isolated_env(self.home)
         return subprocess.run(
             [sys.executable, str(SCRIPTS / "doctor.py"), str(self.tmp), *extra],
             capture_output=True, text=True, encoding="utf-8", env=env,
