@@ -187,7 +187,7 @@ git 历史：Alice 三月/九月各一批、Bob 六月一批
 - **init（每个项目一次）**：初始化 `.ai-dev/`（含 `handoffs/`、`docs/` 与其模板）、自动检测技术栈（Node/Python/Go/Rust + monorepo 子包 + .env 变量）、首份代码索引、工具指针，并由 AI 据实起草 L2 文档（project-brief / architecture / conventions / glossary；lessons 初始可空）。**自动 spec 化项目现状**：扫 TODO/FIXME/半成品，已完成的写 spec.md，未完成的完整跑 spec → plan → tasks。
 - **resume（新会话自动）**：读 START_HERE + HANDOFF + `handoffs/INDEX.md`，沿"下一步"继续；动手前先查 lessons.md。
 - **intake（动手前自动，第零原则）**：用户提出需求后，先跑 `doc_registry.py --intake` 拿四类证据裁定改现有文档还是新建；文档一律进 `.ai-dev/docs/` 并登记进 `DOCS.md`，一个需求只对应一份文档。
-- **handoff（每轮对话结束自动）**：往 `handoffs/` 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks + Intent 受理结论），并把最新结论滚动进 HANDOFF.md；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。
+- **handoff（每轮对话结束自动）**：往 `handoffs/` 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks + Intent 受理结论），并把最新结论滚动进 HANDOFF.md；增删文件则更新代码索引；重大决策补 ADR；HANDOFF 陷阱区某坑重复第二次则提升到 lessons.md。**每轮都写，不等大任务完成**——这是多会话并发、换 agent 不丢上下文的关键。追加成功后 AI 会在回复末尾附 `记忆已储存（<记录文件名>）` 让用户可核对；想找回某个会话当时干了什么用 `log_handoff.py --find <会话Id或Agent名>`，想查哪里没了记忆用 `--gaps`。
 - **retrofit（存量多 Agent 项目接入）**：`scan` 把 git 历史切成历史会话画像、清点存量文档与半成品信号；`baseline` 为每个历史会话回填一条合规记录（"压缩各会话 Id"）；`consolidate` 给存量文档归并建议并登记；最后 doctor 清零。
 - **archive（记录超量自动）**：HANDOFF 超 120 行搬历史区，`handoffs/` 超 200 条搬最旧的进 `archive/handoffs/`，活跃窗口不动。
 - **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、**本机在用工具缺专属指针**（probe 探测会话存储：本地在用的工具没有指针，它的新会话读不到 `.ai-dev` 上下文，`--fix` 定点补齐）、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）、**未登记文档 / 文档缺主题或来源 / 主题重复**等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
@@ -203,7 +203,7 @@ devctx/
 ├── SKILL.md                     # 唯一入口：AI 的操作手册（触发判断、自动动作链、降级路径）
 ├── scripts/                     # AI 调用的工具，用户无需运行
 │   ├── init_project.py          # 初始化 .ai-dev（含 handoffs/ + docs/）+ 技术栈检测 + 首份索引 + 工具指针
-│   ├── log_handoff.py           # 每轮对话压缩记录：追加记录 + 重建 INDEX + 读最近记录（多 Agent 并发安全）
+│   ├── log_handoff.py           # 每轮对话压缩记录：追加记录 + 重建 INDEX + --find/--gaps 反寻（多 Agent 并发安全）
 │   ├── retrofit.py              # 存量项目接入：历史会话画像 + 基线回填 + 存量文档归并登记
 │   ├── doc_registry.py          # 文档登记索引 DOCS.md + 需求受理 intake（防文档泛滥与特性漂移）
 │   ├── build_index.py           # 生成代码地图（尊重 .gitignore 与 ignore.conf）
@@ -236,6 +236,8 @@ python scripts/init_project.py <项目根> [--all] [--force]
 python scripts/log_handoff.py <项目根> --user-file user.txt --body-file body.md \
     [--agent claude-code --session a1b2c3d4] [--model sonnet] [--intent "EXTEND → docs/auth.md"]
 python scripts/log_handoff.py <项目根> --list | --tail 3 [--agent cursor] | --template | --rebuild-index
+python scripts/log_handoff.py <项目根> --find a1b2c3d4   # 找回某会话当时干了什么（按条目文件名读全文）
+python scripts/log_handoff.py <项目根> --gaps           # 时间线缺口：哪里没了记忆（间隔大不等于漏写）
 python scripts/retrofit.py <项目根> scan | plan | probe           # 存量项目：证据清点 / 接入顺序 / 本机会话存储探测
 python scripts/retrofit.py <项目根> baseline --session legacy-bob --topic auth-sms-login \
     --user-file u.txt --done "..." --next "- [ ] ..." --risks "..."   # 历史会话基线回填
@@ -252,6 +254,8 @@ python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 �
 
 全部脚本纯 Python 标准库、跨平台、UTF-8、幂等；手写规则文件默认绝不覆盖。
 `log_handoff.py` 的记录只增不改，`INDEX.md` 原子重建并加锁，多 Agent 并发写安全。
+**每轮追加成功后，AI 会在给用户的回复末尾附一句 `记忆已储存（<记录文件名>）`**——
+用户看不见 `.ai-dev/` 内部，这句确认是唯一闭环；写入失败必须如实报告，禁止假装储存。
 
 ## 设计原则
 

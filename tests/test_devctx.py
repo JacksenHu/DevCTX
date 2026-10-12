@@ -845,6 +845,78 @@ class TestRetrofit(unittest.TestCase):
         self.assertIn("全部已登记", r.stdout)
 
 
+# ------------------------------------------------------- recall: find / gaps
+
+class TestRecall(ProjectFixture):
+    """--find 按会话 Id 定位、--gaps 时间线缺口：回答"哪里没了记忆"。"""
+
+    def _record_at(self, when: _dt.datetime, agent: str, session: str, user: str) -> Path:
+        p = self.ai / "handoffs" / f"{when.strftime('%Y%m%d-%H%M%S')}-{agent}-{session}.md"
+        p.write_text(
+            "<!-- devctx-schema: v2 -->\n<!-- devctx-handoff: entry -->\n\n"
+            "# 对话压缩记录\n\n"
+            "| 字段 | 值 |\n|---|---|\n"
+            f"| 时间戳 | {when.isoformat()} |\n"
+            f"| Agent | {agent} |\n"
+            f"| 会话 ID | {session} |\n"
+            "| 模型 | — |\n\n"
+            "## 用户原话\n\n"
+            f"> {user}\n\n"
+            "## 本轮压缩\n\n### Done\n\n做了点事\n",
+            encoding="utf-8")
+        os.utime(p, (when.timestamp(), when.timestamp()))
+        return p
+
+    def test_find_locates_session_by_id(self) -> None:
+        now = _dt.datetime.now()
+        self._record_at(now - _dt.timedelta(days=5), "claude-code", "a1b2c3d4", "把登录改成手机号")
+        self._record_at(now - _dt.timedelta(days=2), "cursor", "ff00ee11", "修导航样式")
+        r = self.run_script("log_handoff.py", "--find", "a1b2c3d4")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 条匹配", r.stdout)
+        self.assertIn("把登录改成手机号", r.stdout)
+        self.assertIn("读全文：handoffs/", r.stdout)
+        self.assertNotIn("修导航样式", r.stdout)
+
+    def test_find_matches_agent_name_too(self) -> None:
+        now = _dt.datetime.now()
+        self._record_at(now - _dt.timedelta(days=3), "cursor", "ff00ee11", "修导航样式")
+        self._record_at(now - _dt.timedelta(days=1), "claude-code", "a1b2c3d4", "把登录改成手机号")
+        r = self.run_script("log_handoff.py", "--find", "cursor")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 条匹配", r.stdout)
+        self.assertIn("修导航样式", r.stdout)
+        self.assertNotIn("把登录改成手机号", r.stdout)
+
+    def test_find_miss_is_honest(self) -> None:
+        r = self.run_script("log_handoff.py", "--find", "nosuch")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("没有匹配", r.stdout)
+
+    def test_gaps_reports_silent_stretch(self) -> None:
+        now = _dt.datetime.now()
+        self._record_at(now - _dt.timedelta(days=30), "claude-code", "old11111", "早期需求")
+        self._record_at(now - _dt.timedelta(days=1), "claude-code", "a1b2c3d4", "把登录改成手机号")
+        r = self.run_script("log_handoff.py", "--gaps")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("1 个无记录区间", r.stdout)
+        self.assertIn("间隔 29 天", r.stdout)
+        self.assertIn("old11111", r.stdout)          # 断点前最后一条要能定位
+
+    def test_gaps_silent_when_dense(self) -> None:
+        now = _dt.datetime.now()
+        self._record_at(now - _dt.timedelta(days=2), "claude-code", "old11111", "早期需求")
+        self._record_at(now - _dt.timedelta(hours=2), "claude-code", "a1b2c3d4", "把登录改成手机号")
+        r = self.run_script("log_handoff.py", "--gaps")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("无超过 7 天", r.stdout)
+
+    def test_gaps_needs_two_records(self) -> None:
+        r = self.run_script("log_handoff.py", "--gaps")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("不足两条", r.stdout)
+
+
 class TestProbe(unittest.TestCase):
     """Local session-store probing: discovery only, never message bodies."""
 

@@ -39,6 +39,8 @@ Usage (called by the AI, never by the user)::
     python scripts/log_handoff.py . --list              # 全部条目一览
     python scripts/log_handoff.py . --tail 3            # 最近 3 条全文
     python scripts/log_handoff.py . --tail 1 --agent cursor   # 某 Agent 的最后一条
+    python scripts/log_handoff.py . --find a1b2c3d4     # 找回某会话当时干了什么
+    python scripts/log_handoff.py . --gaps              # 时间线缺口：哪里没了记忆
     python scripts/log_handoff.py . --template          # 打印条目模板
     python scripts/log_handoff.py . --rebuild-index     # 只重建 INDEX.md
     python scripts/log_handoff.py . --init              # 建 handoffs/ 与空 INDEX
@@ -257,6 +259,8 @@ def render_index(entries: list[Entry]) -> str:
         + (f" · 仅显示最近 {len(shown)} 条" if len(shown) < len(entries) else ""),
         "- 读法：新会话 / 换 Agent / 换模型 → 先读本文件定位，再读对应条目文件；",
         "  「开放 Next」列是别人还欠的活，「Risks」是已知的坑，动手前先扫一眼。",
+        "- 找回某个会话当时干了什么：`log_handoff.py --find <会话Id或Agent名>`，按条目文件名读全文；",
+        "  查哪里没了记忆（无记录区间）：`log_handoff.py --gaps`（间隔大不等于漏写，只是提示）。",
         "- 写出一条记录：`scripts/log_handoff.py`（无技能环境按 `0000-template.md` 手工写）。",
         "",
         "| # | 时间戳 | Agent | 会话 | 用户需求（截断） | 开放Next | 条目文件 |",
@@ -397,6 +401,61 @@ def cmd_list(handoffs: Path) -> int:
     return 0
 
 
+def _entry_dt(e: Entry) -> _dt.datetime:
+    """记录的本地时间。文件名时间戳最可靠（ts 字段可能缺失），逐级降级。"""
+    m = re.match(r"(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})", e.name)
+    if m:
+        return _dt.datetime(*(int(x) for x in m.groups()))
+    try:
+        return _dt.datetime.fromisoformat(e.ts)
+    except ValueError:
+        return _dt.datetime.fromtimestamp(e._mtime)
+
+
+def cmd_find(handoffs: Path, needle: str) -> int:
+    """按 Agent 名 / 会话 Id / 文件名子串检索，定位"当时具体干了什么"。"""
+    entries = scan_entries(handoffs)
+    key = needle.lower()
+    hits = [e for e in entries
+            if key in e.agent.lower() or key in e.session.lower() or key in e.name.lower()]
+    if not hits:
+        print(f"[!] 没有匹配 {needle!r} 的记录（可试 --list 看全部）。")
+        return 1
+    print(f"{len(hits)} 条匹配（旧 → 新）：\n")
+    for e in hits:
+        flag = "  [格式待修]" if e.malformed else ""
+        print(f"  {e.short_ts}  {e.agent:<14} {e.session:<10}  {e.user_summary}{flag}")
+        print(f"    → 读全文：handoffs/{e.name}")
+    return 0
+
+
+def cmd_gaps(handoffs: Path, gap_days: int) -> int:
+    """时间线缺口：相邻记录间隔超过阈值的无记录区间。
+
+    间隔大不等于漏写（那段时间可能真的没开发），所以只报区间不断言错误，
+    让用户/模型判断是真空白还是该补记忆（补记忆跑 retrofit baseline）。
+    """
+    entries = scan_entries(handoffs)
+    if len(entries) < 2:
+        print("[!] 记录不足两条，无从判断缺口。")
+        return 1
+    gaps = []
+    for a, b in zip(entries, entries[1:]):
+        delta = _entry_dt(b) - _entry_dt(a)
+        if delta.days >= gap_days:
+            gaps.append((a, b, delta))
+    if not gaps:
+        print(f"[OK] 无超过 {gap_days} 天的无记录区间（{len(entries)} 条记录）。")
+        return 0
+    print(f"{len(gaps)} 个无记录区间（阈值 {gap_days} 天，共 {len(entries)} 条记录）：\n")
+    for a, b, delta in gaps:
+        print(f"  {a.short_ts} → {b.short_ts}  间隔 {delta.days} 天")
+        print(f"    断点前最后一条：handoffs/{a.name}")
+    print("\n  间隔大不等于漏写（可能期间没开发）；确认要补记忆：retrofit baseline 回填；")
+    print("  想找回某个会话当时干了什么：--find <会话Id或Agent名>。")
+    return 0
+
+
 def cmd_init(root: Path) -> int:
     handoffs = root / AI_DEV_DIR / HANDOFFS_DIR
     handoffs.mkdir(parents=True, exist_ok=True)
@@ -442,6 +501,12 @@ def main() -> int:
     ap.add_argument("--template", action="store_true", help="打印条目模板")
     ap.add_argument("--list", action="store_true", help="列出全部记录")
     ap.add_argument("--tail", type=int, metavar="N", help=f"读最近 N 条全文（默认 {TAIL_DEFAULT}）")
+    ap.add_argument("--find", metavar="关键词",
+                    help="按 Agent 名/会话 Id 检索：定位某会话当时干了什么，按条目文件名读全文")
+    ap.add_argument("--gaps", action="store_true",
+                    help="时间线缺口：列出无记录区间（间隔大不等于漏写，只是提示）")
+    ap.add_argument("--gap-days", type=int, default=7,
+                    help="--gaps 的间隔阈值天数（默认 7）")
     ap.add_argument("--rebuild-index", action="store_true", help="只重建 INDEX.md")
     ap.add_argument("--init", action="store_true", help="创建 handoffs/ 与空 INDEX")
     args = ap.parse_args()
@@ -456,6 +521,10 @@ def main() -> int:
         return cmd_init(root)
     if args.list:
         return cmd_list(handoffs)
+    if args.find:
+        return cmd_find(handoffs, args.find)
+    if args.gaps:
+        return cmd_gaps(handoffs, args.gap_days)
     if args.tail is not None:
         return cmd_tail(handoffs, args.tail, args.agent)
     if args.rebuild_index:

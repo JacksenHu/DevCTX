@@ -207,12 +207,26 @@ EXTEND → docs/auth-sms-login.md（用户中途插话：验证码改用固定�
   `.ai-dev/handoffs/`，文件名 `<时间戳>-<Agent>-<会话Id>.md`，再在 `INDEX.md` 补一行。
   时间戳用当前时间；Agent 写你所在工具名；会话 Id 自己生成一个短 id 并在本会话内复用。
 
+**追加成功后，在给用户的回复末尾附一句确认：`记忆已储存（<记录文件名>）`**（文件名照抄脚本输出）。
+写入失败必须如实报告失败与原因，禁止假装储存——用户看不见 `.ai-dev/` 内部，这句确认是唯一闭环。
+
 ### 3.3 每轮顺手：滚动更新 `HANDOFF.md`
 
 把 `handoffs/` 里最新那条的结论并进 `HANDOFF.md` 顶部（当前任务 / 进度 / 下一步 / 陷阱 / 改动清单），
 让只读 `HANDOFF.md` 的会话也能恢复现场。`HANDOFF.md` 是当前状态总览，`handoffs/` 是每轮原始流水，不复制内容只做汇总。
 结构变动顺手 reindex，重大决策补 ADR。
 **HANDOFF 陷阱区某个坑重复出现第二次，就提升到 `lessons.md`**（永久教训，不随压缩丢失）；动手前先查 lessons.md。
+
+### 3.4 回忆与缺口：按会话 Id / 时间戳找回当时
+
+记录文件名就是 `<时间戳>-<Agent>-<会话Id>.md`，`INDEX.md` 一行一条汇总——回忆路径：
+
+- **某会话当时干了什么**（用户说"上次用 Cursor 那个会话…" / "我们哪天改的登录逻辑"）：
+  跑 `scripts/log_handoff.py <项目根> --find <会话Id或Agent名>`，按输出的条目文件名读
+  `handoffs/<该条>.md` 全文；也可直接读 `INDEX.md` 按「时间戳 / Agent / 会话」列定位。
+- **哪里没了记忆**（时间线缺口）：`scripts/log_handoff.py <项目根> --gaps`，
+  列出相邻记录间隔超阈值的无记录区间。间隔大不等于漏写（那段时间可能真的没开发）；
+  确认要补就跑 `scripts/retrofit.py <项目根> baseline` 按口述/git 回填，禁止编造。
 
 ### 3.4 多 Agent 协作
 
@@ -240,6 +254,8 @@ scripts/log_handoff.py <根>                      # 追加一轮压缩记录 + �
     --user "..." --done "..." --next "..." --verify "..." --risks "..." --intent "..."   # 快捷参数，可缺省组合
     --template                # 打印条目模板
     --list / --tail N [--agent A]   # 读：全部一览 / 最近 N 条全文（换 Agent 后恢复现场）
+    --find <会话Id或Agent名>   # 反寻：某会话当时具体干了什么（按条目文件名读全文）
+    --gaps [--gap-days N]      # 时间线缺口：哪里没了记忆（间隔大不等于漏写，只提示）
     --rebuild-index / --init  # 只重建索引 / 建 handoffs/
 scripts/build_index.py <根> [--max-lines 1200]   # 重建代码地图（尊重 .gitignore 与 ignore.conf）
 scripts/sync_rules.py <根> [--all] [--inject] [--check]   # 指针同步/校验
