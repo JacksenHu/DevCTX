@@ -13,7 +13,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from _common import AI_DEV_DIR, DOCS_DIR, HANDOFFS_DIR, TOOL_SPECS, find_project_root, load_ignore_lines, read_text, write_text  # noqa: E402
+from _common import AI_DEV_DIR, DOCS_DIR, HANDOFFS_DIR, TOOL_SPECS, find_project_root, load_ignore_lines, read_text, write_text , ensure_stdio_safe # noqa: E402
 import sync_rules  # noqa: E402
 import build_index  # noqa: E402
 import archive_handoff  # noqa: E402
@@ -361,6 +361,46 @@ def check_docs(root: Path, ai: Path, fix: bool) -> list[Finding]:
     return out
 
 
+def check_decisions(ai: Path, fix: bool) -> list[Finding]:
+    """ADR 档案检查：编号唯一、文件名合规（NNNN-主题.md）。
+
+    编号撞号不是格式洁癖：两份 ADR 顶着同一个编号，读者无法判断哪份是权威，
+    选型就此失据。重编号会打断「见 0005」式交叉引用，故只报不自动修。
+    """
+    out = []
+    dec_dir = ai / "decisions"
+    if not dec_dir.is_dir():
+        return [Finding("ok", "decisions", "decisions/ absent (no ADR yet)")]
+    files = sorted(p for p in dec_dir.glob("*.md")
+                   if p.is_file() and not p.name.startswith("0000-"))
+    if not files:
+        return [Finding("ok", "decisions", "decisions/ empty (no ADR yet)")]
+
+    numbers: dict[str, list[str]] = {}
+    bad_name: list[str] = []
+    for p in files:
+        m = re.match(r"^(\d{3,4})-(.+)\.md$", p.name)
+        if not m:
+            bad_name.append(p.name)
+            continue
+        numbers.setdefault(m.group(1), []).append(p.name)
+
+    dupes = {n: ns for n, ns in numbers.items() if len(ns) > 1}
+    if dupes:
+        detail = "; ".join(f"#{n} → {' + '.join(ns)}"
+                           for n, ns in sorted(dupes.items())[:3])
+        out.append(Finding("err", "decisions",
+                           f"duplicate ADR number(s): {detail} — 编号必须唯一"
+                           "（撞号=两份'权威'），把后写的那份重编号"))
+    else:
+        out.append(Finding("ok", "decisions", f"{len(numbers)} ADR(s), numbers unique"))
+
+    if bad_name:
+        out.append(Finding("warn", "decisions",
+                           f"文件名不合规（应为 NNNN-主题.md）: {', '.join(bad_name[:3])}"))
+    return out
+
+
 def check_session_stores(root: Path, fix: bool) -> list[Finding]:
     """本机会话存储探测 vs 项目指针：本地在用的工具没有专属指针，新会话读不到上下文。
 
@@ -425,6 +465,7 @@ def run_doctor(root: Path, fix: bool) -> list[Finding]:
     findings += check_handoff(ai, root, fix)
     findings += check_handoffs(root, ai, fix)
     findings += check_docs(root, ai, fix)
+    findings += check_decisions(ai, fix)
     findings += check_pointers(root, fix)
     findings += check_session_stores(root, fix)
     findings += check_git(root)
@@ -433,6 +474,7 @@ def run_doctor(root: Path, fix: bool) -> list[Finding]:
 
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("project", nargs="?", default=".")
     ap.add_argument("--fix", action="store_true")

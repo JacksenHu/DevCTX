@@ -59,6 +59,10 @@
     接手需注明来源、`HANDOFF.md` 是唯一共享黑板
 - `doctor.py` 新增 handoffs 专项腐化检查：索引与磁盘漂移、记录缺 `devctx-handoff` 标记 /
   缺用户原话 / 无压缩节（定位到文件名）、记录数超 200 条、HANDOFF.md 落后于流水
+- `doctor.py` 新增 `decisions/`（ADR）检查：**编号撞号报 err**（存量审计现场：两个 `0005`，
+  `0005-codex-breach-…` 与 `0005-社区与计费架构方案.md` 并存——两份 ADR 顶同一个编号，
+  读者无法判断哪份权威，选型失据；重编号会打断「见 0005」式交叉引用，故只报不自动修）、
+  文件名不合 `NNNN-主题.md` 报 warn；`0000-template.md` 模板不计入
 - `archive_handoff.py` 支持 `--max-entries N` / `--entries-only`：把最旧的对话记录搬进
   `archive/handoffs/`，活跃窗口绝不触碰
 - `init_project.py` 初始化时创建 `handoffs/`、`handoffs/archive/`、复制条目模板为
@@ -66,6 +70,12 @@
 - 新增 `tests/`：覆盖压缩规范解析、多 Agent 并发写、INDEX 一致性、归档、ignore 通配
 
 ### Fixed
+- **Windows GBK 控制台打印崩栈**（存量审计现场目击：工具一输出就 `UnicodeEncodeError`，
+  用户只能靠 `PYTHONIOENCODING=utf-8` 绕过）：脚本回声项目数据（生僻字 / emoji / `⚠`）时，
+  控制台编码编不出的字符让 `print` 直接抛异常，用户看到半截输出 + 一屏 traceback。
+  新增 `_common.ensure_stdio_safe()`：保留终端当前编码（GBK 控制台中文依旧显示全对），
+  只把报错策略从 strict 换成 replace——编不出的字符降级成 `?`，绝不再崩；
+  8 个 CLI 脚本 `main()` 首行挂载，附 GBK 环境回归测试（崩因对照 + 修复后存活的字节级断言）
 - **`doctor.py` 语法错误**（`scripts/doctor.py:69` 多余右括号）导致整个脚本无法运行——
   而 init 收尾、`--fix` 自愈、CI `--check` 全都依赖它
 - `doc_registry.cmd_add` 的字段写入只替换已存在的行：AI 手工放的文档没有字段表时，

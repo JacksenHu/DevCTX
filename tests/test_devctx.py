@@ -1067,5 +1067,93 @@ class TestProbe(unittest.TestCase):
         self.assertIn("未发现", r.stdout)
 
 
+# --------------------------------------------------------------- ADR 检查
+
+class TestDecisions(ProjectFixture):
+    """check_decisions：编号唯一 + 文件名合规（审计现场：两个 0005）。"""
+
+    def _adr(self, name: str, body: str = "# ADR\n\n## 背景\nx\n") -> Path:
+        p = self.ai / "decisions" / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(body, encoding="utf-8")
+        return p
+
+    def test_duplicate_number_is_error(self) -> None:
+        self._adr("0005-codex-breach-网关回调签名.md")
+        self._adr("0005-社区与计费架构方案.md")
+        self._adr("0004-设备证明存储选型.md")
+        findings = doctor.run_doctor(self.tmp, False)
+        dup = [f for f in findings if f.area == "decisions" and "duplicate" in f.msg]
+        self.assertTrue(dup, "编号撞号必须报 err")
+        self.assertEqual(dup[0].level, "err")
+        self.assertIn("#0005", dup[0].msg)
+        self.assertIn("0005-codex-breach", dup[0].msg)
+        self.assertIn("0005-社区与计费架构方案.md", dup[0].msg)
+
+    def test_bad_filename_is_warn(self) -> None:
+        self._adr("0004-设备证明存储选型.md")
+        self._adr("随手记.md")
+        findings = doctor.run_doctor(self.tmp, False)
+        bad = [f for f in findings if f.area == "decisions" and "不合规" in f.msg]
+        self.assertTrue(bad, "非 NNNN-主题.md 文件名必须报 warn")
+        self.assertEqual(bad[0].level, "warn")
+        self.assertIn("随手记.md", bad[0].msg)
+
+    def test_unique_numbers_are_ok(self) -> None:
+        self._adr("0004-设备证明存储选型.md")
+        self._adr("0005-codex-breach-网关回调签名.md")
+        findings = doctor.run_doctor(self.tmp, False)
+        ok = [f for f in findings if f.area == "decisions" and "unique" in f.msg]
+        self.assertTrue(ok, "编号唯一时应报 ok")
+        self.assertEqual(ok[0].level, "ok")
+
+    def test_no_decisions_dir_is_ok(self) -> None:
+        findings = doctor.run_doctor(self.tmp, False)
+        msgs = [f.msg for f in findings if f.area == "decisions"]
+        # init 已建空 decisions/ 目录 → "empty (no ADR yet)"；目录整个没了也是同类 ok
+        self.assertTrue(msgs and all("no ADR yet" in m for m in msgs), msgs)
+        self.assertTrue(all(f.level == "ok" for f in findings if f.area == "decisions"))
+
+
+# --------------------------------------------------------------- stdio 安全
+
+class TestStdioSafety(unittest.TestCase):
+    """Windows GBK 控制台打印崩栈的回归测试（审计现场目击）。
+
+    崩因：print 回声项目数据时碰到控制台编码编不出的字符（⚠ ✓ emoji 生僻字），
+    strict 策略直接 UnicodeEncodeError。ensure_stdio_safe() 把策略换成 replace：
+    编不出的降级成 `?`，当前编码（GBK）下的中文依旧全对。
+    """
+
+    def _run_gbk(self, use_fix: bool) -> subprocess.CompletedProcess:
+        tmp = Path(tempfile.mkdtemp(prefix="devctx-gbk-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        script = tmp / "echo_unicode.py"
+        script.write_text(
+            "import sys\n"
+            f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
+            + ("import _common\n_common.ensure_stdio_safe()\n" if use_fix else "")
+            + "print('\u26a0 编不出的字符')\n"
+            + "print('中文项目数据')\n",
+            encoding="utf-8")
+        env = dict(os.environ, PYTHONIOENCODING="gbk")
+        # 按字节收：子进程用 GBK 编码输出，中文以 GBK 字节流原样到达
+        return subprocess.run([sys.executable, str(script)],
+                              capture_output=True, env=env)
+
+    def test_gbk_console_crashes_without_the_fix(self) -> None:
+        r = self._run_gbk(use_fix=False)
+        self.assertNotEqual(r.returncode, 0, "未修复时 GBK 控制台必须崩（锁住崩因）")
+        self.assertIn(b"UnicodeEncodeError", r.stderr)
+
+    def test_gbk_console_survives_with_the_fix(self) -> None:
+        r = self._run_gbk(use_fix=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(b"?", r.stdout, "编不出的字符降级为 ?")
+        self.assertIn("中文项目数据".encode("gbk"), r.stdout,
+                      "GBK 可编码的中文按原编码全对输出")
+        self.assertEqual(r.stderr, b"", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

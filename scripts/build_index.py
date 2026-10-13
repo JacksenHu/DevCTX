@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import AI_DEV_DIR, find_project_root, load_ignore_lines, match_ignore  # noqa: E402
+from _common import AI_DEV_DIR, find_project_root, load_ignore_lines, match_ignore , ensure_stdio_safe # noqa: E402
 
 HASH_EXT = {
     ".py", ".rb", ".sh", ".bash", ".zsh", ".ps1", ".yml", ".yaml", ".toml", ".ini",
@@ -262,6 +262,7 @@ def render(root: Path, tree_lines: list[str], records: list, max_lines: int) -> 
 
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("project", nargs="?", default=".")
     ap.add_argument("--max-lines", type=int, default=1200)

@@ -25,6 +25,7 @@ from _common import (  # noqa: E402
     HANDOFFS_DIR,
     INDEX_NAME,
     ENTRY_TEMPLATE_NAME,
+    ensure_stdio_safe,
     find_project_root,
     read_text,
     write_text,
@@ -332,6 +333,7 @@ def init(root: Path, mode: str, force: bool) -> int:
 
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("project", nargs="?", default=".", help="target project directory")
     ap.add_argument("--mode", choices=["detected", "all"], default="detected")

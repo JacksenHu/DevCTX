@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import (  # noqa: E402
     AI_DEV_DIR,
     HANDOFFS_DIR,
+    ensure_stdio_safe,
     find_project_root,
     read_text,
     write_text,
@@ -128,6 +129,7 @@ def archive(root: Path, max_lines: int) -> int:
 
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("project", nargs="?", default=".")
     ap.add_argument("--max-lines", type=int, default=120,

@@ -260,7 +260,7 @@ scripts/log_handoff.py <根>                      # 追加一轮压缩记录 + �
 scripts/build_index.py <根> [--max-lines 1200]   # 重建代码地图（尊重 .gitignore 与 ignore.conf）
 scripts/sync_rules.py <根> [--all] [--inject] [--check]   # 指针同步/校验
 scripts/archive_handoff.py <根> [--max-lines 120] [--max-entries 200] [--entries-only]
-scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/本机在用工具缺指针/git误忽略/handoffs腐化/文档腐化
+scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/本机在用工具缺指针/git误忽略/handoffs腐化/文档腐化/ADR编号撞号或文件名不合规
 ```
 
 - **doc_registry**：`--intake` 扫四类证据（handoffs 开放 Next、specs 未闭环、docs 索引、code-index）给出

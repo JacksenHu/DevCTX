@@ -23,6 +23,7 @@ from _common import (  # noqa: E402
     END_BLOCK,
     TOOL_SPECS,
     ToolSpec,
+    ensure_stdio_safe,
     find_project_root,
     injected_block,
     is_own_pointer,
@@ -125,6 +126,7 @@ def _print_report(actions: list[Action]) -> None:
 
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("project", nargs="?", default=".", help="project directory (default: cwd)")
     ap.add_argument("--mode", choices=["detected", "all"], default="detected")

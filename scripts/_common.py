@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -149,6 +150,28 @@ def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
+
+
+def ensure_stdio_safe() -> None:
+    """让 print 在任何控制台编码下都不崩（Windows 传统控制台是 GBK/cp936）。
+
+    崩溃现场：控制台编码编不出的字符（⚠ ✓ emoji、项目文档标题里的生僻字，
+    任何被工具回声到屏幕上的项目数据）会让 print 抛 UnicodeEncodeError，
+    用户看到半截输出 + 一屏 traceback。
+
+    修法：保留终端当前编码（GBK 控制台上的中文依旧显示全对，不搞成乱码），
+    只把报错策略从 strict 换成 replace——编不出的字符降级成 `?`，
+    UTF-8 终端（Windows Terminal / VSCode / CI / macOS / Linux）则完全不受影响。
+    幂等，可在每个 CLI 入口重复调用；失败（流被替换/无 reconfigure）时静默跳过。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(errors="replace")
+        except (ValueError, OSError):
+            pass
 
 
 # ---------- agent identity (for per-conversation handoff records) ----------

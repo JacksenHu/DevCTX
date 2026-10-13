@@ -51,6 +51,7 @@ from _common import (  # noqa: E402
     DOCS_DIR,
     DOC_INDEX_NAME,
     DOC_TEMPLATE_NAME,
+    ensure_stdio_safe,
     find_project_root,
     read_text,
     write_text,
@@ -459,6 +460,7 @@ def cmd_init(root: Path) -> int:
 
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")

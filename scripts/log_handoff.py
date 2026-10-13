@@ -67,6 +67,7 @@ from _common import (  # noqa: E402
     SCHEMA_VERSION,
     SECTIONS,
     detect_agent,
+    ensure_stdio_safe,
     find_project_root,
     new_session_id,
     read_text,
@@ -480,6 +481,7 @@ def cmd_template() -> int:
 # --------------------------------------------------------------------- main
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")

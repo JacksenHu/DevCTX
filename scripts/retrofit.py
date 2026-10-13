@@ -56,6 +56,7 @@ from _common import (  # noqa: E402
     AI_DEV_DIR,
     DOCS_DIR,
     DOC_INDEX_NAME,
+    ensure_stdio_safe,
     find_project_root,
     load_ignore_lines,
     match_ignore,
@@ -668,6 +669,7 @@ def cmd_consolidate(root: Path, apply_: bool) -> int:
 
 
 def main() -> int:
+    ensure_stdio_safe()
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
