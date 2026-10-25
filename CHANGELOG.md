@@ -2,6 +2,35 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0] - 2026-10-25
+
+### Added
+- **收工清理（`scripts/cleanup.py`）**：AI 干活会留下缓存 / 临时 / 测试残留文件
+  （`__pycache__`、`.pytest_cache`、`*.tmp`、`*.pyc`、`.coverage`、编辑器备份等），
+  堆久了污染代码地图、占磁盘、误导新 Agent。用户说"收工/清理/打扫一下"或收工 handoff 时自动跑：
+  - **明文规格（唯一权威清单，改脚本顶部常量即可）**：缓存类（`__pycache__` / `.pytest_cache` /
+    `.mypy_cache` / `.ruff_cache` / `.eslintcache` / `.parcel-cache` / `.turbo` / `.vite` /
+    `.nyc_output` / `htmlcov`）、临时文件类（`*.tmp` / `*.temp` / `*.tsbuildinfo` / `*.orig` /
+    `*.rej` / `*.swp` / `.coverage` / `.DS_Store` / `Thumbs.db`）、谨慎类（`node_modules/.cache` /
+    `.next/cache` / `.nuxt` / `.tox` / **>1MB 的 .log**，需 `--include-caution` 才列/删）
+  - **安全硬边界**：`.git` / `.ai-dev/` / `specs/` / `.specify/` / `node_modules` / `venv` /
+    `.env` / `dist` / `build` / `coverage` / `.gradle` / `.idea` **永不扫描、永不删除**——
+    这些不是"无用文件"；符号链接只删链接本身；候选 resolve 后必须仍在项目根内（防逃逸）
+  - **默认 dry-run 只列不删**；`--apply` 才删（删除前二次确认，`--yes` 跳过）；
+    `--context N` 从最近 N 轮 handoff 压缩记录提取 Verify/Done/Risks 片段，
+    回答"这些缓存是不是这轮测试产生的"；`--list-specs` 打印规格
+  - SKILL.md 触发判断表新增"收工/清理/打扫一下 → cleanup"，新增 §4.1 完整流程：
+    扫描 → 展示清单给用户 → **用户同意后**才删除 → 删除结果写进本轮 handoff 的 `Done`
+- README 同步：解决什么问题表加"残留文件"行、日常工作流加 cleanup、目录结构加 `cleanup.py`、
+  脚本命令加收工清理用法；版本徽章与最新版本说明升到 v0.6.0
+
+### Fixed
+- **`SKILL.md` §4 标题被坏编辑粘连**（标题与首句正文合并在一行），已还原为标题换行正文
+- **`cleanup.py --context` 的 INDEX 文件名提取**：`INDEX.md` 行以 `|` 开头时 `split("|")[0]`
+  取到空串导致最近记录线索全部丢失；改为从行内取含 `.md` 的段，测试构造两条记录验证通过
+- **`cleanup.py` 顶层目录缓存未识别**：原实现把项目根单独处理，漏了 `SAFE_CACHE_DIRS` 匹配，
+  根下的缓存目录扫不到；统一所有深度处理
+
 ## [0.5.0] - 2026-10-25
 
 ### Added
