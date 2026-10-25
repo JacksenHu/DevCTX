@@ -1,6 +1,6 @@
 ---
 name: devctx
-description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。每轮对话结束自动往 .ai-dev/handoffs/ 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），支持多 Agent 并发协作不互相覆盖。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 每轮对话结束或任务闭环或切换前自动写交接（handoff）、按压缩规范记录到 handoffs/、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现。"
+description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude Code、Windsurf、Trae/Trae Work CN、GitHub Copilot、Cline、Roo、Continue、Gemini CLI、Codex、Aider、豆包及任意 work 软件）之间无缝切换开发，并解决切换模型/新开会话导致的上下文丢失与重复读代码浪费 token 的问题。每轮对话结束自动往 .ai-dev/handoffs/ 追加一条压缩记录（时间戳 + Agent-会话Id + 用户原话 + Done/Next/Verify/Risks），支持多 Agent 并发协作不互相覆盖。收工时按规格列出 AI 干活产生的缓存/临时/测试残留文件（cleanup），询问后删除。内置 speckit / Spec Kit 规格驱动开发（SDD）联动：用户说'用 spec/sdd/speckit 做 XXX'时自动跑 specify → plan → tasks → implement 完整流程。触发场景：(1) 用户要在多个 IDE/AI 工具间来回开发同一项目、统一项目规范与规则文件（CLAUDE.md/.cursorrules/.windsurfrules/.trae/rules/AGENTS.md 等）、给项目接入 AI 协作上下文或生成 AGENTS.md；(2) 首次为项目建立统一上下文目录 .ai-dev、工具指针与代码索引；(3) 新会话/换工具/换模型时自动恢复现场（resume）；(4) 每轮对话结束或任务闭环或切换前自动写交接（handoff）、按压缩规范记录到 handoffs/、归档、重建索引、同步指针；(5) 对项目上下文做健康体检（doctor）；(6) 用户提到上下文工程、项目记忆/工作记忆外置、跨工具协作规范、省 token、避免重复扫描代码库；(7) 用户说'用 spec/sdd/speckit 做 XXX'、写功能规格、生成实施计划、任务拆解、按规格实现；(8) 用户说'收工/清理/打扫一下'时按规格清理 AI 干活的缓存/临时/测试残留文件。"
 ---
 
 # Cross-IDE Dev Context — 跨工具无缝开发协议
@@ -59,6 +59,7 @@ description: "让同一个项目在多个 AI 编程工具/IDE（Cursor、Claude 
 | 难以逆转的选型/架构决定 | **decision**（ADR） | 用户意图 |
 | 新装工具、指针被覆盖、用户问"状态/正常吗/检查一下" | **doctor / sync** | 用户意图或 AI 自动 |
 | `handoffs/` 记录超过约 200 条 | **archive**（搬最旧的进 `archive/handoffs/`，活跃窗口不动） | AI 自动 |
+| 用户说"收工/清理/打扫一下" | **cleanup**（§4.1：按规格列出 AI 干活产生的缓存/临时/测试残留，询问后删除） | 用户意图 |
 | 用户说"用 spec/sdd/speckit 做 XXX" | **speckit 全链**（见 §7） | 用户意图 |
 
 ## 1. init 全链（每个项目一次，AI 自动完成）
@@ -238,6 +239,35 @@ EXTEND → docs/auth-sms-login.md（用户中途插话：验证码改用固定�
   读对应 `tasks.md` 勾选项算进度（已完成 N / 共 M 条），把"specs/<名>/tasks.md 第 N/M 条（正在做什么）"写进 HANDOFF 元信息；
   已闭环的 spec 不写。spec.md / plan.md / tasks.md 归 `specs/`，不要复制进 `.ai-dev/`。
 
+### 4.1 收工清理（cleanup：按规格列出 AI 干活的残留文件，询问后删除）
+
+AI 干活会留下缓存 / 临时 / 测试残留文件（`__pycache__`、`.pytest_cache`、`*.tmp`、编辑器备份等），
+堆久了污染代码地图、占磁盘、误导新 Agent。**用户说"收工/清理/打扫一下"或收工 handoff 时顺手跑**：
+
+```bash
+python scripts/cleanup.py <项目根>                        # 只扫描列出（默认 dry-run，绝不删）
+python scripts/cleanup.py <项目根> --apply --yes          # 用户同意后按规格删除
+python scripts/cleanup.py <项目根> --include-caution      # 谨慎类（node_modules/.cache、.next/cache、.tox、>1MB 日志）也列入/删除
+python scripts/cleanup.py <项目根> --context N            # 顺带读最近 N 轮 handoff 记录做"测试线索"
+python scripts/cleanup.py <项目根> --list-specs           # 打印当前清理规格
+```
+
+**流程（AI 自动，删除必须用户确认）**：
+
+1. 跑 `cleanup.py <根>`（默认 dry-run）——脚本按**明文规格**扫描并分类：
+   **缓存类**（可再生，建议删：`__pycache__` / `.pytest_cache` / `.mypy_cache` / `.ruff_cache` /
+   `.eslintcache` / `.parcel-cache` / `.turbo` / `.vite` / `*.pyc` / `*.tsbuildinfo` / `.coverage` 等）、
+   **临时文件类**（`*.tmp` / `*.temp` / `*.orig` / `*.rej` / `*.swp` / `.DS_Store` / `Thumbs.db` 等）、
+   **谨慎类**（仅列出，需 `--include-caution` 才删：`node_modules/.cache` / `.next/cache` / `.tox` / >1MB 日志）。
+   `--context N` 会从最近 N 轮 handoff 压缩记录里提取 Verify/Done/Risks 片段，回答"这些缓存是不是这轮测试产生的"。
+2. **把清单完整展示给用户**（数量、大小、每项说明），问"删除这些吗？"；用户同意后再跑
+   `cleanup.py <根> --apply --yes` 删除。**未经用户同意绝不可删**。
+3. 删除后把结果写进本轮 handoff 记录的 `Done`（清理了哪些、释放多少空间），并随手 reindex（删掉的缓存不应留在 code-index）。
+
+**安全边界（脚本硬性保证，AI 不越界）**：`.git` / `.ai-dev/` / `specs/` / `.specify/` /
+`node_modules` / `venv` 等环境目录、`dist` / `build` 构建产物**永不扫描、永不删除**——
+它们不是"无用文件"。符号链接只删链接本身不跟随目标；候选 resolve 后必须在项目根内。
+
 ## 5. 维护脚本（AI 调用；均纯标准库、跨平台、UTF-8、幂等）
 
 ```text
@@ -260,6 +290,8 @@ scripts/log_handoff.py <根>                      # 追加一轮压缩记录 + �
 scripts/build_index.py <根> [--max-lines 1200]   # 重建代码地图（尊重 .gitignore 与 ignore.conf）
 scripts/sync_rules.py <根> [--all] [--inject] [--check]   # 指针同步/校验
 scripts/archive_handoff.py <根> [--max-lines 120] [--max-entries 200] [--entries-only]
+scripts/cleanup.py <根> [--apply] [--yes] [--include-caution] [--context N] [--list-specs]
+                # 收工清理：按规格列出 AI 干活的缓存/临时/测试残留，询问后删除（默认 dry-run）
 scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模板/索引过时/HANDOFF超限/指针漂移/本机在用工具缺指针/git误忽略/handoffs腐化/文档腐化/ADR编号撞号或文件名不合规
 ```
 
@@ -276,6 +308,9 @@ scripts/doctor.py <根> [--fix]                   # 体检：缺文件/L2空模�
 - **sync_rules**：纯指针随时刷新；手写规则文件默认不覆盖只报 conflict，`--inject` 用 begin/end 标记块注入、块外内容绝不丢，可重复执行。
 - **archive_handoff**：绝不触碰归档线以上的活跃区；`--max-entries` 只把最旧的对话记录搬进 `archive/handoffs/`，活跃窗口不动；
   活跃区本身超限只提示 AI 手工压缩。
+- **cleanup**：默认 dry-run 只列不删；`--apply` 删缓存类 + 临时文件类（`--include-caution` 连谨慎类），
+  删除前需二次确认或 `--yes`；`--context N` 从最近 N 轮 handoff 记录提取测试线索；
+  `.git`/`.ai-dev`/`specs`/`node_modules`/`dist`/`build` 等硬排除永不触碰。收工清理见 §4.1。
 - **doctor**：无参数出分级报告（退出码 0 健康 / 1 警告 / 2 错误）；`--fix` 自动补缺、重建过时索引、归档、同步指针、
   重建 handoffs 与 docs 索引。handoffs 专项检查：索引与磁盘漂移、记录缺 schema/缺用户原话/无压缩节、记录数超限、
   HANDOFF.md 落后于流水。docs 专项检查：文档未登记（错误级）、缺主题/缺来源需求、主题重复、无记录引用。
@@ -348,4 +383,5 @@ handoff 时自动读 `specs/<进行中名>/tasks.md`，数勾选数量（已完�
   **没有按对话轮次新建的第二份文档**；用户插话与追加都已并进同一份文档。
 - code-index 与当前文件结构一致、无运行时噪音；在用工具指针同步、手写规则未被破坏。
 - HANDOFF 能让全新会话仅凭它 + START_HERE 对齐现状，且不超长。
+- 用户要求收工清理时：已按规格列出候选并展示给用户，用户确认后才删除；`.git` / `.ai-dev` / `specs` / `node_modules` / `dist` / `build` 未被触碰；清理结果已写进本轮 handoff 的 `Done`。
 - 全程未让用户手动执行命令；无 Python 时已走降级路径落地。
