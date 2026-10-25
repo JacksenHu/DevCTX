@@ -1,6 +1,6 @@
 # devctx
 
-[![Version](https://img.shields.io/badge/version-0.6.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](scripts/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](scripts/)
@@ -8,7 +8,7 @@
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型 / 时间 / 人之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token、不重复踩旧坑。
 > 内置 **Spec Kit（SDD）**：init 时自动把项目现状 spec 化，说"用 spec 做 XXX"自动跑完整规格驱动开发流程。
 >
-> 最新版本 **v0.6.0**（每轮对话压缩流水 / 多 Agent 协作 / intake 需求受理 / 存量项目接入 retrofit / 收工清理 cleanup）· 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新版本 **v0.7.0**（每轮对话压缩流水 / 多 Agent 协作 / intake 需求受理 / 存量项目接入 retrofit / 收工清理 cleanup / 深度清理按会话圈定残留）· 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
 **[▶ 打开动态骨架导图（交互版，一屏看完全部机制）](https://af49fc77d61398fc8.app.workbuddy.host)**
 
@@ -32,7 +32,7 @@
 | 探索弯路 | 新工具不知道之前试过什么不行 | HANDOFF 陷阱区 + `lessons.md` 永久教训，避免重蹈覆辙 |
 | 文档泛滥 | 每个需求新建一份文档，越堆越乱，Agent 分不清哪份算数 | 一个需求一份文档 + `DOCS.md` 登记索引，未登记即错误 |
 | 特性漂移 | 用户插话/追加被当成新需求重做，做出来不是用户要的 | 动手前 intake 四类证据裁定改还是建，结论写进 `Intent` 留痕 |
-| 残留文件 | AI 干活留下的缓存/临时/测试残留堆满项目，污染索引、误导新 Agent | 收工时 `cleanup.py` 按明文规格扫描列出，询问后删除，`.git`/`.ai-dev`/`dist` 等永不触碰 |
+| 残留文件 | AI 干活留下的缓存/临时/测试残留堆满项目，污染索引、误导新 Agent | 收工时 `cleanup.py` 按明文规格扫描列出，询问后删除，`.git`/`.ai-dev`/`dist` 等永不触碰；会话特别长时 `--deep --session` 读该会话全部记录、只圈定它产生的残留，不误伤其他会话 |
 
 ## 它不只是"跨 IDE"——7 个真实使用场景
 
@@ -209,6 +209,7 @@ git 历史：Alice 三月/九月各一批、Bob 六月一批
 - **retrofit（存量多 Agent 项目接入）**：`scan` 把 git 历史切成历史会话画像、清点存量文档与半成品信号；`baseline` 为每个历史会话回填一条合规记录（"压缩各会话 Id"）；`consolidate` 给存量文档归并建议并登记；最后 doctor 清零。
 - **archive（记录超量自动）**：HANDOFF 超 120 行搬历史区，`handoffs/` 超 200 条搬最旧的进 `archive/handoffs/`，活跃窗口不动。
 - **cleanup（收工清理，用户说"收工/清理"时自动）**：按明文规格扫描 AI 干活留下的缓存 / 临时 / 测试残留文件（`__pycache__` / `.pytest_cache` / `*.tmp` / `*.pyc` / `.coverage` 等，谨慎类 `node_modules/.cache` / `.next/cache` / >1MB 日志默认只列），把清单展示给用户、**用户同意后**才删除；`.git` / `.ai-dev` / `specs` / `node_modules` / `dist` / `build` 永不触碰；`--context N` 从最近 N 轮 handoff 记录提取"这些缓存是不是这轮测试产生的"线索。
+- **cleanup 深度清理（用户说"深度清理"、会话特别长时自动）**：`--deep --session <会话Id>` 读该会话**全部** handoff 记录，按整个会话上下文圈定它产生的残留（完整路径在记录里出现、或文件名/目录名被显式提及才命中；提过的后缀只提示不圈定，绝不误伤其他会话的缓存）；圈定 → 展示清单 → **用户同意后**删除，安全边界与普通 cleanup 相同。
 - **doctor（体检）**：一键发现空模板文档、过时索引、超长交接、指针漂移、**本机在用工具缺专属指针**（probe 探测会话存储：本地在用的工具没有指针，它的新会话读不到 `.ai-dev` 上下文，`--fix` 定点补齐）、`.ai-dev` 被 git 误忽略、schema 版本过期、**对话流水腐化**（索引漂移 / 记录缺原话或压缩节 / 记录数超限 / HANDOFF 落后于流水）、**未登记文档 / 文档缺主题或来源 / 主题重复**、**ADR 编号撞号或文件名不合规**（两份 ADR 顶同一个编号 = 两份"权威"，选型失据）等腐化，`--fix` 自动修复；CI 可用 `--check` 拦截。
 
 ## 已覆盖的 AI 工具（12 种，可扩展）
@@ -228,7 +229,7 @@ devctx/
 │   ├── build_index.py           # 生成代码地图（尊重 .gitignore 与 ignore.conf）
 │   ├── sync_rules.py            # 生成/校验/注入各工具薄指针（幂等）
 │   ├── archive_handoff.py       # 安全归档超长 HANDOFF 历史与超量对话记录
-│   ├── cleanup.py               # 收工清理：按规格扫描缓存/临时/测试残留，询问后删除（默认 dry-run）
+│   ├── cleanup.py               # 收工清理：按规格扫描缓存/临时/测试残留，询问后删除（默认 dry-run）；--deep 按会话上下文圈定 |
 │   ├── doctor.py                # 健康体检 + --fix 自动修复（含 handoffs / docs 腐化 / session-stores 检查）
 │   └── _common.py               # 工具映射表、项目根探测、忽略匹配、Agent/会话识别
 ├── assets/templates/            # 初始化时复制进项目的自包含模板
@@ -274,6 +275,8 @@ python scripts/sync_rules.py   <项目根> [--all] [--inject] [--check]
 python scripts/archive_handoff.py <项目根> [--max-lines 120] [--max-entries 200] [--entries-only]
 python scripts/cleanup.py <项目根> [--apply] [--yes] [--include-caution] [--context N] [--list-specs]
                 # 收工清理：按规格列出 AI 干活的缓存/临时/测试残留（默认只列不删）
+python scripts/cleanup.py <项目根> --deep [--session <会话Id>] [--apply] [--yes]
+                # 深度清理：读该会话全部 handoff 记录圈定其产生的残留（默认只列不删；--session 省略时列出会话）
 python scripts/doctor.py       <项目根> [--fix]   # 0 健康 / 1 警告 / 2 错误
 ```
 
