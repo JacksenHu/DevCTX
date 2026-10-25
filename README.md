@@ -1,6 +1,6 @@
 # devctx
 
-[![Version](https://img.shields.io/badge/version-unreleased-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](scripts/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](scripts/)
@@ -8,7 +8,7 @@
 > 让**同一个项目**在任意多个 AI 编程工具 / IDE / 模型 / 时间 / 人之间无缝接续开发：换工具不丢上下文、不重读全仓、不重复烧 token、不重复踩旧坑。
 > 内置 **Spec Kit（SDD）**：init 时自动把项目现状 spec 化，说"用 spec 做 XXX"自动跑完整规格驱动开发流程。
 >
-> 最新功能见 [CHANGELOG](CHANGELOG.md)（Unreleased：probe 本机会话探测 / doctor session-stores 体检 / handoff 反寻与追加确认）· 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
+> 最新版本 **v0.5.0**（每轮对话压缩流水 / 多 Agent 协作 / intake 需求受理 / 存量项目接入 retrofit）· 许可证 MIT · 纯 Python 标准库，跨 Windows / macOS / Linux
 
 **[▶ 打开动态骨架导图（交互版，一屏看完全部机制）](https://af49fc77d61398fc8.app.workbuddy.host)**
 
