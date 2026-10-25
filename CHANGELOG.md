@@ -2,7 +2,7 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.5.0] - 2026-10-25
 
 ### Added
 - **动态骨架导图（`docs/devctx-map.html`，单文件零依赖）**：深色终端风格的交互导图——
