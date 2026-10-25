@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass
@@ -227,22 +228,120 @@ def _context_clues(root: Path, n: int) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# 深度清理（--deep --session）：只清理"某个会话 Id 产生"的残留
+# ---------------------------------------------------------------------------
+
+def _list_sessions(root: Path) -> list[str]:
+    """从 INDEX.md 列出出现过的会话 Id（供 --deep 忘记 --session 时提示）。"""
+    idx = root / AI_DEV_DIR / HANDOFFS_DIR / "INDEX.md"
+    if not idx.is_file():
+        return []
+    found: set[str] = set()
+    for ln in read_text(idx).splitlines():
+        segs = [s.strip() for s in ln.split("|")]
+        # 行形如 "| <文件名>.md | <agent> | <会话> | N |"
+        if len(segs) >= 5 and segs[1].endswith(".md") and segs[3]:
+            found.add(segs[3])
+    return sorted(found)
+
+
+def _session_record_files(root: Path, session_id: str) -> list[Path]:
+    """读 INDEX.md，返回该会话 Id 的全部记录文件（按 INDEX 行序=时间序）。"""
+    idx = root / AI_DEV_DIR / HANDOFFS_DIR / "INDEX.md"
+    if not idx.is_file():
+        return []
+    found: list[Path] = []
+    for ln in read_text(idx).splitlines():
+        segs = [s.strip() for s in ln.split("|")]
+        if len(segs) >= 5 and segs[1].endswith(".md") and segs[3] == session_id:
+            p = root / AI_DEV_DIR / HANDOFFS_DIR / segs[1]
+            if p.is_file():
+                found.append(p)
+    return found
+
+
+def _extract_clues(records: list[Path]) -> tuple[set[str], list[str], set[str]]:
+    """从该会话全部记录全文提取路径线索。
+
+    返回 (name_clues, fulltext, suffix_clues)：
+    - name_clues：记录里**显式出现**的、命中明文规格的目录名/文件名集合
+      （按名字过滤候选——只有候选自己就是这个名字时才圈定）
+    - fulltext：每条记录全文（候选的完整路径字符串出现在记录里 → 精确命中）
+    - suffix_clues：记录里出现过的后缀，只作报告展示，**不独立圈定**
+      （否则记录提过 scratch_a.tmp 会把所有 .tmp 都圈进来，误伤其他会话的残留）
+    """
+    name_clues: set[str] = set()
+    suffix_clues: set[str] = set()
+    fulltext: list[str] = []
+    for p in records:
+        text = read_text(p)
+        fulltext.append(text)
+        for name in SAFE_CACHE_DIRS:
+            if name in text:
+                name_clues.add(name)
+        for name in SAFE_FILE_NAMES:
+            if name in text:
+                name_clues.add(name)
+        for suf in SAFE_FILE_SUFFIXES:
+            if suf in text:
+                suffix_clues.add(suf)
+        for suf in CAUTION_FILE_SUFFIXES:
+            if suf in text:
+                suffix_clues.add(suf)
+        # 记录里出现的路径 token（含 / . _ -）：尾部名字命中规格名 → 名称线索
+        for m in re.finditer(r"[\w./\\-]+", text):
+            tok = m.group(0).strip("./\\")
+            if not tok:
+                continue
+            name = tok.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+            if name in SAFE_CACHE_DIRS or name in SAFE_FILE_NAMES:
+                name_clues.add(name)
+    return name_clues, fulltext, suffix_clues
+
+
+def _deep_match(c: _Cand, name_clues: set[str], fulltext: list[str]) -> bool:
+    """候选是否属于该会话：完整路径出现在某条记录里，或候选名在记录里显式出现过。"""
+    rel_s = str(c.path)
+    for text in fulltext:
+        if rel_s in text:
+            return True
+    if c.path.name in name_clues:
+        return True
+    return False
+
+
+# ---------------------------------------------------------------------------
 # 输出与删除
 # ---------------------------------------------------------------------------
 
 def _print_report(root: Path, cands: list[_Cand], include_caution: bool,
-                  context: list[str]) -> None:
+                  context: list[str],
+                  deep: tuple[str, list[Path], int, set[str]] | None = None) -> None:
+    """deep = (session_id, records, total_candidates, clues)：深度清理模式。"""
     cache = [c for c in cands if c.kind == "cache"]
     temp = [c for c in cands if c.kind == "temp-file"]
     caution = [c for c in cands if c.kind == "caution"]
     total_size = sum(c.size for c in cands)
 
-    print(f"devctx 收工清理 — {root}\n")
-    if context:
-        print("── 最近工作测试线索（来自 handoffs 压缩记录）──")
-        for line in context:
-            print(f"  {line}")
+    if deep:
+        session_id, records, total, name_clues, suffix_clues = deep
+        print(f"devctx 深度清理（会话 {session_id}）— {root}\n")
+        if records:
+            print(f"── 会话上下文：{len(records)} 条 handoff 记录"
+                  f"（{records[0].name} … {records[-1].name}）──")
+        if name_clues:
+            print(f"── 圈定线索 {len(name_clues)} 项：{', '.join(sorted(name_clues))} ──")
+        if suffix_clues:
+            print(f"── 提及后缀（仅提示，不圈定）：{', '.join(sorted(suffix_clues))} ──")
+        print(f"── 全项目扫描 {total} 个候选，按会话上下文圈定 {len(cands)} 个 ──")
         print()
+    else:
+        print(f"devctx 收工清理 — {root}\n")
+        if context:
+            print("── 最近工作测试线索（来自 handoffs 压缩记录）──")
+            for line in context:
+                print(f"  {line}")
+            print()
 
     def dump(items: list[_Cand], title: str) -> None:
         if not items:
@@ -324,6 +423,10 @@ def main() -> int:
     ap.add_argument("--include-caution", action="store_true", help="把谨慎类也列入/删除")
     ap.add_argument("--context", type=int, default=3, metavar="N",
                     help="读最近 N 轮 handoff 记录做测试线索（默认 3；0 关闭）")
+    ap.add_argument("--deep", action="store_true",
+                    help="深度清理：只清理指定会话 Id 产生的残留（需 --session）")
+    ap.add_argument("--session", metavar="会话Id",
+                    help="目标会话 Id（配合 --deep；长会话按整个会话上下文圈定残留）")
     ap.add_argument("--list-specs", action="store_true", help="打印清理规格后退出")
     args = ap.parse_args()
 
@@ -341,6 +444,31 @@ def main() -> int:
         return 0
 
     root = find_project_root(args.project)
+
+    if args.deep:
+        if not args.session:
+            sess = _list_sessions(root)
+            if not sess:
+                print("没有找到任何 handoff 会话记录（.ai-dev/handoffs/INDEX.md 为空或不存在）。")
+                return 1
+            print("深度清理需要指定会话 Id（--session）。INDEX 中出现过的会话：")
+            for s in sess:
+                print(f"  {s}")
+            return 1
+        records = _session_record_files(root, args.session)
+        if not records:
+            print(f"没有找到会话 {args.session} 的 handoff 记录。")
+            return 1
+        cands_all = _scan(root, args.include_caution)
+        name_clues, fulltext, suffix_clues = _extract_clues(records)
+        cands = [c for c in cands_all if _deep_match(c, name_clues, fulltext)]
+        if args.apply:
+            return _apply(root, cands, args.yes, args.include_caution)
+        _print_report(root, cands, args.include_caution, [],
+                      deep=(args.session, records, len(cands_all),
+                            name_clues, suffix_clues))
+        return 0
+
     cands = _scan(root, args.include_caution)
     clues = _context_clues(root, args.context) if args.context > 0 else []
 
